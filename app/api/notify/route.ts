@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Leave request not found' }, { status: 404 });
     }
 
-    const requester = leave.requester as { id: string; full_name: string; email: string; role: string; team: string };
+    const requester = leave.requester as unknown as { id: string; full_name: string; email: string; role: string; team: string };
 
     const leaveDetails = {
       requesterName: requester.full_name,
