@@ -34,7 +34,7 @@ const SpotflowLogo = () => (
   </svg>
 );
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -68,6 +68,7 @@ export default function Sidebar() {
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    onClose();
     router.push('/login');
     router.refresh();
   };
@@ -80,7 +81,7 @@ export default function Sidebar() {
   const showAdmin = profile?.is_admin === true;
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${isOpen ? ' sidebar-open' : ''}`}>
       {/* Logo */}
       <div className="sidebar-logo">
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none' }}>
@@ -96,6 +97,7 @@ export default function Sidebar() {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onClose}
             className={`sidebar-nav-item ${pathname === item.href ? 'active' : ''}`}
           >
             {item.icon}
@@ -112,6 +114,7 @@ export default function Sidebar() {
             <p className="sidebar-section-label" style={{ marginTop: '16px' }}>Admin</p>
             <Link
               href="/admin"
+              onClick={onClose}
               className={`sidebar-nav-item ${pathname.startsWith('/admin') ? 'active' : ''}`}
             >
               <Shield size={16} />

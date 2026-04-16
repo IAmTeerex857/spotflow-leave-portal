@@ -113,7 +113,7 @@ export default function DashboardPage() {
             <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
               Recent Requests
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+            <div className="dash-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               {recentThree.map((r) => (
                 <Link key={r.id} href={`/requests/${r.id}`} style={{ textDecoration: 'none' }}>
                   <div
@@ -145,18 +145,18 @@ export default function DashboardPage() {
         )}
 
         {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '28px' }}>
+        <div className="dash-stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '28px' }}>
           {[
             { label: 'Pending', value: pending, icon: <Clock size={15} />, color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
             { label: 'Approved', value: approved, icon: <CheckCircle size={15} />, color: '#22C55E', bg: 'rgba(34,197,94,0.08)' },
             { label: 'Rejected', value: rejected, icon: <XCircle size={15} />, color: '#EF4444', bg: 'rgba(239,68,68,0.08)' },
           ].map(stat => (
-            <div key={stat.label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div key={stat.label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>{stat.label}</p>
-                <p style={{ fontSize: '26px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{stat.value}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>{stat.label}</p>
+                <p style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{stat.value}</p>
               </div>
-              <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: stat.color }}>
+              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: stat.color, flexShrink: 0 }}>
                 {stat.icon}
               </div>
             </div>
@@ -178,17 +178,19 @@ export default function DashboardPage() {
           </div>
 
           {/* Column headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 80px 110px 100px 40px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
-            {['Type', 'Dates', 'Days', 'Status', 'Submitted', ''].map(col => (
-              <span key={col} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{col}</span>
-            ))}
+          <div className="req-table-header" style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 80px 110px 100px 40px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type</span>
+            <span className="req-col-header-dates" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dates</span>
+            <span className="req-col-header-days" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Days</span>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</span>
+            <span className="req-col-header-submitted" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Submitted</span>
+            <span></span>
           </div>
 
           {loading ? (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
           ) : requests.length === 0 ? (
             <div style={{ padding: '60px 20px', textAlign: 'center' }}>
-              <div style={{ fontSize: '32px', marginBottom: '12px' }}>🗂️</div>
               <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '16px' }}>No leave requests yet</p>
               <Link href="/requests/new" className="btn btn-primary" style={{ fontSize: '13px' }}>Submit your first request</Link>
             </div>
@@ -196,6 +198,7 @@ export default function DashboardPage() {
             requests.map((r, i) => (
               <Link key={r.id} href={`/requests/${r.id}`} style={{ textDecoration: 'none' }}>
                 <div
+                  className="req-table-row"
                   style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 80px 110px 100px 40px', padding: '14px 20px', borderBottom: i < requests.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center', cursor: 'pointer', transition: 'background 0.12s ease' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
@@ -204,12 +207,12 @@ export default function DashboardPage() {
                     {statusIcon[r.status]}
                     <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{leaveTypeLabel[r.leave_type]}</span>
                   </div>
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <span className="req-col-dates" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                     {format(new Date(r.start_date), 'dd MMM')} – {format(new Date(r.end_date), 'dd MMM yyyy')}
                   </span>
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.duration_days}d</span>
+                  <span className="req-col-days" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.duration_days}d</span>
                   <div><StatusBadge status={r.status} /></div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{format(new Date(r.created_at), 'dd MMM yyyy')}</span>
+                  <span className="req-col-submitted" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{format(new Date(r.created_at), 'dd MMM yyyy')}</span>
                   <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
                 </div>
               </Link>
