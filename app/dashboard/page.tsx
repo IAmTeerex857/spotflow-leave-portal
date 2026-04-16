@@ -4,7 +4,7 @@ import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { PlusCircle, Clock, CheckCircle, XCircle, ChevronRight, ArrowUpRight } from 'lucide-react';
+import { PlusCircle, Clock, CheckCircle, XCircle, ChevronRight, ArrowUpRight, Umbrella, Thermometer, User, FileText } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 type Status = 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -26,11 +26,11 @@ const leaveTypeLabel: Record<string, string> = {
   other: 'Other',
 };
 
-const leaveTypeIcon: Record<string, string> = {
-  annual: '🌴',
-  sick: '🤒',
-  personal: '📋',
-  other: '📝',
+const leaveTypeIcon: Record<string, React.ReactNode> = {
+  annual: <Umbrella size={20} strokeWidth={1.5} />,
+  sick: <Thermometer size={20} strokeWidth={1.5} />,
+  personal: <User size={20} strokeWidth={1.5} />,
+  other: <FileText size={20} strokeWidth={1.5} />,
 };
 
 const statusIcon: Record<Status, React.ReactNode> = {
@@ -123,8 +123,8 @@ export default function DashboardPage() {
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
-                        {leaveTypeIcon[r.leave_type] ?? '📝'}
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+                        {leaveTypeIcon[r.leave_type] ?? <FileText size={20} strokeWidth={1.5} />}
                       </div>
                       <ArrowUpRight size={14} style={{ color: 'var(--text-muted)', marginTop: '2px' }} />
                     </div>
