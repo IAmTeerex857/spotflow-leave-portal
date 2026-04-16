@@ -5,10 +5,10 @@ const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password'];
 const MANAGER_ROUTES = ['/manager'];
 const ADMIN_ROUTES = ['/admin'];
 
-type Role = 'engineer' | 'line_manager' | 'engineering_manager' | 'head_of_product';
+type Role = 'engineer' | 'frontend_engineer' | 'backend_engineer' | 'product_designer' | 'product_manager' | 'frontend_line_manager' | 'backend_line_manager' | 'engineering_manager' | 'head_of_product' | 'line_manager';
 
 function isManager(role: Role) {
-  return ['line_manager', 'engineering_manager', 'head_of_product'].includes(role);
+  return ['frontend_line_manager', 'backend_line_manager', 'engineering_manager', 'head_of_product', 'line_manager'].includes(role);
 }
 
 export async function proxy(request: NextRequest) {

@@ -1,11 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, PlusCircle, ClipboardList, History, LogOut, ChevronRight, Shield } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, ClipboardList, History, LogOut, ChevronRight, UserCog, CalendarDays } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useEffect, useState } from 'react';
 
-type Role = 'engineer' | 'line_manager' | 'engineering_manager' | 'head_of_product';
+type Role = 'engineer' | 'frontend_engineer' | 'backend_engineer' | 'product_designer' | 'product_manager' | 'frontend_line_manager' | 'backend_line_manager' | 'engineering_manager' | 'head_of_product' | 'line_manager';
 
 interface Profile {
   full_name: string;
@@ -17,15 +17,17 @@ interface Profile {
 const engineerNav = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={16} /> },
   { label: 'New Request', href: '/requests/new', icon: <PlusCircle size={16} /> },
+  { label: 'Calendar', href: '/calendar', icon: <CalendarDays size={16} /> },
 ];
 
 const managerNav = [
   { label: 'Request Queue', href: '/manager/queue', icon: <ClipboardList size={16} /> },
   { label: 'History', href: '/manager/history', icon: <History size={16} /> },
+  { label: 'Calendar', href: '/calendar', icon: <CalendarDays size={16} /> },
 ];
 
 function isManager(role: Role) {
-  return ['line_manager', 'engineering_manager', 'head_of_product'].includes(role);
+  return ['frontend_line_manager', 'backend_line_manager', 'engineering_manager', 'head_of_product', 'line_manager'].includes(role);
 }
 
 const SpotflowLogo = () => (
@@ -73,7 +75,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
     router.refresh();
   };
 
-  const nav = profile && isManager(profile.role) ? managerNav : engineerNav;
+  const isManagerRole = profile ? isManager(profile.role) : false;
   const initials = profile?.full_name?.charAt(0) ?? '?';
   const teamLabel = profile?.team
     ? profile.team.charAt(0).toUpperCase() + profile.team.slice(1)
@@ -92,8 +94,9 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
 
       {/* Nav */}
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <p className="sidebar-section-label">Navigation</p>
-        {nav.map((item) => (
+        {/* My Leave section — always visible */}
+        <p className="sidebar-section-label">My Leave</p>
+        {engineerNav.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -108,6 +111,27 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
           </Link>
         ))}
 
+        {/* Team section — only for managers */}
+        {isManagerRole && (
+          <>
+            <p className="sidebar-section-label" style={{ marginTop: '16px' }}>Team</p>
+            {managerNav.filter(item => item.href !== '/calendar').map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                className={`sidebar-nav-item ${pathname.startsWith(item.href) ? 'active' : ''}`}
+              >
+                {item.icon}
+                {item.label}
+                {pathname.startsWith(item.href) && (
+                  <ChevronRight size={13} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+                )}
+              </Link>
+            ))}
+          </>
+        )}
+
         {/* Admin link — only visible to admins */}
         {showAdmin && (
           <>
@@ -117,7 +141,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
               onClick={onClose}
               className={`sidebar-nav-item ${pathname.startsWith('/admin') ? 'active' : ''}`}
             >
-              <Shield size={16} />
+              <UserCog size={16} />
               Role Management
               {pathname.startsWith('/admin') && (
                 <ChevronRight size={13} style={{ marginLeft: 'auto', opacity: 0.5 }} />

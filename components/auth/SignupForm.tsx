@@ -5,7 +5,12 @@ import { Eye, EyeOff, Mail, Lock, User, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-const TEAMS = ['Backend', 'Frontend', 'Product'];
+const TEAMS = [
+  { value: 'backend', label: 'Backend' },
+  { value: 'frontend', label: 'Frontend' },
+  { value: 'product', label: 'Product' },
+  { value: 'design', label: 'Design' },
+];
 
 export default function SignupForm() {
   const router = useRouter();
@@ -29,6 +34,7 @@ export default function SignupForm() {
       email,
       password,
       options: {
+        // role defaults to 'engineer' via the DB trigger
         data: { full_name: fullName, team },
       },
     });
@@ -46,7 +52,6 @@ export default function SignupForm() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        {/* Error message */}
         {error && (
           <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '9px', padding: '10px 13px' }}>
             <p style={{ fontSize: '13px', color: '#EF4444' }}>{error}</p>
@@ -78,7 +83,7 @@ export default function SignupForm() {
             <Users size={15} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none', zIndex: 1 }} />
             <select id="team" name="team" className="form-input" style={{ paddingLeft: '38px' }} required>
               <option value="">Select your team…</option>
-              {TEAMS.map((t) => <option key={t} value={t.toLowerCase()}>{t}</option>)}
+              {TEAMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
         </div>
