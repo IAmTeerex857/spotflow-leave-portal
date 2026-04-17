@@ -218,10 +218,10 @@ function RowActions({ request, onEdit, onDelete }: {
 
       {open && (
         <div style={{
-          position: 'absolute', right: 0, top: '32px', zIndex: 50,
+          position: 'absolute', right: 0, bottom: '32px', zIndex: 50,
           background: 'var(--bg-surface)', border: '1px solid var(--border-strong)',
-          borderRadius: '10px', padding: '4px', minWidth: '140px',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          borderRadius: '10px', padding: '4px', minWidth: '148px',
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.5)',
           animation: 'scaleIn 0.12s ease',
         }}>
           {/* Edit — only for pending */}

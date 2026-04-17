@@ -152,7 +152,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
       </nav>
 
       {/* User footer */}
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px', marginTop: '12px' }}>
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '14px', paddingBottom: '12px', marginTop: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '9px' }}>
           <div style={{
             width: '32px', height: '32px', borderRadius: '50%',
