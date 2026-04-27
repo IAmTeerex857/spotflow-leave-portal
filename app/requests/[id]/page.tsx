@@ -113,7 +113,7 @@ export default function RequestDetailPage() {
       </header>
 
       <div className="page-content fade-in">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px', alignItems: 'start' }}>
+        <div className="detail-grid">
 
           {/* ── Main details card ── */}
           <div className="glass-card" style={{ padding: '0 24px' }}>

@@ -54,17 +54,13 @@ export default function AdminPage() {
   const [pendingRoles, setPendingRoles] = useState<Record<string, Role>>({});
 
   useEffect(() => { loadProfiles(); }, []);
-
   useEffect(() => {
     if (tab === 'balances' && balances.length === 0) loadBalances();
   }, [tab]);
 
   const loadProfiles = async () => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, team, role, is_admin')
-      .order('full_name');
+    const { data } = await supabase.from('profiles').select('id, full_name, email, team, role, is_admin').order('full_name');
     if (data) {
       setProfiles(data as Profile[]);
       const initial: Record<string, Role> = {};
@@ -97,6 +93,12 @@ export default function AdminPage() {
 
   const hasChanged = (id: string, currentRole: Role) => pendingRoles[id] !== currentRole;
 
+  const AvatarCircle = ({ name, size = 32 }: { name: string; size?: number }) => (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size > 28 ? '14px' : '12px', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
+      {name.charAt(0)}
+    </div>
+  );
+
   return (
     <AppShell>
       <header className="topbar">
@@ -118,23 +120,20 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '3px', width: 'fit-content' }}>
-          {([['roles', 'Role Management'], ['balances', 'Leave Balances']] as [Tab, string][]).map(([key, label]) => (
+          {(['roles', 'balances'] as Tab[]).map((key) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               style={{
                 background: tab === key ? 'var(--bg-surface)' : 'transparent',
                 border: tab === key ? '1px solid var(--border-strong)' : '1px solid transparent',
-                borderRadius: '8px',
-                padding: '7px 16px',
-                fontSize: '13px',
+                borderRadius: '8px', padding: '7px 16px', fontSize: '13px',
                 fontWeight: tab === key ? 600 : 400,
                 color: tab === key ? 'var(--text-primary)' : 'var(--text-muted)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
+                cursor: 'pointer', transition: 'all 0.15s ease',
               }}
             >
-              {label}
+              {key === 'roles' ? 'Role Management' : 'Leave Balances'}
             </button>
           ))}
         </div>
@@ -149,61 +148,78 @@ export default function AdminPage() {
               </p>
             </div>
 
-            <div className="glass-card" style={{ overflow: 'hidden' }}>
+            {/* Desktop table */}
+            <div className="glass-card admin-desktop-table" style={{ overflow: 'hidden' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 120px 2fr 100px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
                 {['Member', 'Email', 'Team', 'Role', ''].map(col => (
                   <span key={col} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{col}</span>
                 ))}
               </div>
-
               {loading ? (
                 <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
               ) : (
                 profiles.map((profile, i) => (
-                  <div
-                    key={profile.id}
+                  <div key={profile.id}
                     style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 120px 2fr 100px', padding: '14px 20px', borderBottom: i < profiles.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center', transition: 'background 0.12s ease' }}
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-                  >
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
-                        {profile.full_name.charAt(0)}
-                      </div>
-                      <div>
-                        <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {profile.full_name}
-                          {profile.is_admin && (
-                            <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: '4px', padding: '1px 5px' }}>ADMIN</span>
-                          )}
-                        </p>
-                      </div>
+                      <AvatarCircle name={profile.full_name} size={32} />
+                      <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {profile.full_name}
+                        {profile.is_admin && <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: '4px', padding: '1px 5px' }}>ADMIN</span>}
+                      </p>
                     </div>
                     <span style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '12px' }}>{profile.email}</span>
                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{teamLabel(profile.team)}</span>
                     <div style={{ paddingRight: '12px' }}>
-                      <select
-                        className="form-input"
-                        value={pendingRoles[profile.id] ?? profile.role}
-                        onChange={e => handleRoleChange(profile.id, e.target.value as Role)}
-                        style={{ fontSize: '13px', padding: '7px 32px 7px 10px' }}
-                      >
+                      <select className="form-input" value={pendingRoles[profile.id] ?? profile.role} onChange={e => handleRoleChange(profile.id, e.target.value as Role)} style={{ fontSize: '13px', padding: '7px 32px 7px 10px' }}>
                         {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                       </select>
                     </div>
                     <div>
                       {saved === profile.id ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#22C55E', fontWeight: 500 }}>
-                          <CheckCircle size={13} /> Saved
-                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#22C55E', fontWeight: 500 }}><CheckCircle size={13} /> Saved</span>
                       ) : (
-                        <button
-                          onClick={() => handleSave(profile)}
-                          disabled={!hasChanged(profile.id, profile.role) || saving === profile.id}
-                          className="btn btn-ghost"
-                          style={{ fontSize: '12px', padding: '6px 14px', opacity: hasChanged(profile.id, profile.role) ? 1 : 0.35, cursor: hasChanged(profile.id, profile.role) ? 'pointer' : 'default' }}
-                        >
+                        <button onClick={() => handleSave(profile)} disabled={!hasChanged(profile.id, profile.role) || saving === profile.id} className="btn btn-ghost" style={{ fontSize: '12px', padding: '6px 14px', opacity: hasChanged(profile.id, profile.role) ? 1 : 0.35 }}>
                           {saving === profile.id ? 'Saving…' : <><Save size={12} /> Save</>}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Mobile cards */}
+            <div className="admin-mobile-cards" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {loading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
+              ) : (
+                profiles.map(profile => (
+                  <div key={profile.id} className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <AvatarCircle name={profile.full_name} size={36} />
+                        <div>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {profile.full_name}
+                            {profile.is_admin && <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: '4px', padding: '1px 5px' }}>ADMIN</span>}
+                          </p>
+                          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{profile.email}</p>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '3px 8px', flexShrink: 0 }}>{teamLabel(profile.team)}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <select className="form-input" value={pendingRoles[profile.id] ?? profile.role} onChange={e => handleRoleChange(profile.id, e.target.value as Role)} style={{ fontSize: '13px', flex: 1 }}>
+                        {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      </select>
+                      {saved === profile.id ? (
+                        <span style={{ display: 'flex', alignItems: 'center', padding: '0 10px', color: '#22C55E' }}><CheckCircle size={16} /></span>
+                      ) : (
+                        <button onClick={() => handleSave(profile)} disabled={!hasChanged(profile.id, profile.role) || saving === profile.id} className="btn btn-ghost" style={{ fontSize: '13px', padding: '10px 16px', opacity: hasChanged(profile.id, profile.role) ? 1 : 0.35, flexShrink: 0 }}>
+                          {saving === profile.id ? 'Saving…' : <><Save size={13} /> Save</>}
                         </button>
                       )}
                     </div>
@@ -216,32 +232,26 @@ export default function AdminPage() {
 
         {/* ── Leave Balances Tab ── */}
         {tab === 'balances' && (
-          <div className="glass-card" style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 120px 2fr 80px 80px 80px 140px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
-              {['Member', 'Team', 'Role', 'Used', 'Pending', 'Left', 'Balance'].map(col => (
-                <span key={col} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{col}</span>
-              ))}
-            </div>
-
-            {balancesLoading ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading balances…</div>
-            ) : (
-              balances
-                .sort((a, b) => a.remaining - b.remaining)
-                .map((b, i) => {
+          <>
+            {/* Desktop table */}
+            <div className="glass-card admin-desktop-table" style={{ overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 120px 2fr 80px 80px 80px 140px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
+                {['Member', 'Team', 'Role', 'Used', 'Pending', 'Left', 'Balance'].map(col => (
+                  <span key={col} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{col}</span>
+                ))}
+              </div>
+              {balancesLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading balances…</div>
+              ) : (
+                balances.sort((a, b) => a.remaining - b.remaining).map((b, i) => {
                   const pct = Math.min(100, Math.round((b.used / ANNUAL_ALLOWANCE) * 100));
                   const low = b.remaining <= 5;
                   return (
-                    <div
-                      key={b.id}
-                      style={{ display: 'grid', gridTemplateColumns: '2fr 120px 2fr 80px 80px 80px 140px', padding: '14px 20px', borderBottom: i < balances.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center', transition: 'background 0.12s ease' }}
+                    <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '2fr 120px 2fr 80px 80px 80px 140px', padding: '14px 20px', borderBottom: i < balances.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center', transition: 'background 0.12s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-                    >
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
-                          {b.full_name.charAt(0)}
-                        </div>
+                        <AvatarCircle name={b.full_name} size={28} />
                         <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{b.full_name}</span>
                       </div>
                       <span style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{b.team}</span>
@@ -249,7 +259,6 @@ export default function AdminPage() {
                       <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{b.used}d</span>
                       <span style={{ fontSize: '12px', color: '#F59E0B' }}>{b.pending > 0 ? `+${b.pending}d` : '—'}</span>
                       <span style={{ fontSize: '13px', fontWeight: 600, color: low ? '#EF4444' : '#22C55E' }}>{b.remaining}d</span>
-                      {/* Progress bar */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ flex: 1, height: '5px', borderRadius: '99px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
                           <div style={{ height: '100%', borderRadius: '99px', width: `${pct}%`, background: pct >= 90 ? '#EF4444' : pct >= 70 ? '#F59E0B' : '#22C55E', transition: 'width 0.3s ease' }} />
@@ -259,8 +268,53 @@ export default function AdminPage() {
                     </div>
                   );
                 })
-            )}
-          </div>
+              )}
+            </div>
+
+            {/* Mobile cards */}
+            <div className="admin-mobile-cards" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {balancesLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading balances…</div>
+              ) : (
+                balances.sort((a, b) => a.remaining - b.remaining).map(b => {
+                  const pct = Math.min(100, Math.round((b.used / ANNUAL_ALLOWANCE) * 100));
+                  const low = b.remaining <= 5;
+                  return (
+                    <div key={b.id} className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <AvatarCircle name={b.full_name} size={36} />
+                          <div>
+                            <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{b.full_name}</p>
+                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', textTransform: 'capitalize' }}>{b.team} · {roleLabel(b.role)}</p>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: low ? '#EF4444' : '#22C55E', flexShrink: 0 }}>{b.remaining}d left</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                        {[
+                          { label: 'Used', value: `${b.used}d`, color: 'var(--text-primary)' },
+                          { label: 'Pending', value: b.pending > 0 ? `${b.pending}d` : '—', color: '#F59E0B' },
+                          { label: 'Remaining', value: `${b.remaining}d`, color: low ? '#EF4444' : '#22C55E' },
+                        ].map((stat, idx) => (
+                          <div key={stat.label} style={{ flex: 1, padding: '10px 8px', textAlign: 'center', borderRight: idx < 2 ? '1px solid var(--border)' : 'none', background: 'var(--bg-elevated)' }}>
+                            <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '3px' }}>{stat.label}</p>
+                            <p style={{ fontSize: '15px', fontWeight: 700, color: stat.color }}>{stat.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <div style={{ height: '6px', borderRadius: '99px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: '99px', width: `${pct}%`, background: pct >= 90 ? '#EF4444' : pct >= 70 ? '#F59E0B' : '#22C55E', transition: 'width 0.3s ease' }} />
+                        </div>
+                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>{pct}% of {ANNUAL_ALLOWANCE}d used</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
         )}
 
       </div>

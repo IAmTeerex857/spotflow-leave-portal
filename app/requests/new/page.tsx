@@ -167,7 +167,7 @@ export default function NewRequestPage() {
               </div>
 
               {/* Dates */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div className="dates-grid">
                 <div className="form-group">
                   <label className="form-label" htmlFor="start-date">
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CalendarDays size={13} /> Start date</span>
@@ -239,7 +239,7 @@ export default function NewRequestPage() {
 
               <div className="divider" style={{ margin: '0' }} />
 
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <div className="form-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => router.back()}>Cancel</button>
                 <button id="submit-request" type="submit" className="btn btn-primary" disabled={submitting || workingDays === 0} style={{ opacity: (submitting || workingDays === 0) ? 0.6 : 1 }}>
                   {submitting ? 'Submitting…' : 'Submit request'}

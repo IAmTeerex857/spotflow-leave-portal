@@ -40,8 +40,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Logged in — redirect away from auth pages
-  if (user && (pathname === '/login' || pathname === '/signup')) {
+  // Logged in — redirect away from auth pages and landing
+  if (user && ['/', '/login', '/signup'].includes(pathname)) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

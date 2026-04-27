@@ -403,7 +403,7 @@ export default function DashboardPage() {
 
         {/* Balance widget */}
         {balance && (
-          <div className="glass-card" style={{ padding: '16px 20px', marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          <div className="glass-card balance-widget" style={{ padding: '16px 20px', marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Clock size={16} style={{ color: 'var(--text-secondary)' }} />
@@ -415,7 +415,7 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-            <div style={{ flex: 1, minWidth: '160px', maxWidth: '240px' }}>
+            <div className="balance-bar" style={{ flex: 1, minWidth: '160px', maxWidth: '240px' }}>
               <div style={{ height: '6px', borderRadius: '99px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', borderRadius: '99px',

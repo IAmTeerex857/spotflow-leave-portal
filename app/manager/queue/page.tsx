@@ -166,7 +166,7 @@ export default function ManagerQueuePage() {
               const wouldExceed = used + r.duration_days > ANNUAL_ALLOWANCE;
               return (
                 <div key={r.id} className="glass-card" style={{ padding: '20px 22px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                  <div className="queue-card-inner">
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
                         <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
@@ -204,7 +204,7 @@ export default function ManagerQueuePage() {
                         <p style={{ fontSize: '13px', color: 'var(--text-muted)', fontStyle: 'italic' }}>&ldquo;{r.reason}&rdquo;</p>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <div className="queue-card-actions">
                       <button id={`reject-${r.id}`} className="btn btn-danger" onClick={() => setRejectTarget(r.id)}>
                         <XCircle size={14} /> Reject
                       </button>
