@@ -31,10 +31,10 @@ export default function LoginPage() {
         <div className="glass-card" style={{ padding: '32px' }}>
           <div style={{ marginBottom: '24px' }}>
             <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
-              Welcome back
+              Sign in to Spotflow
             </h1>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-              Sign in to the Leave Portal
+              Use your work Google account to continue
             </p>
           </div>
           <LoginForm />

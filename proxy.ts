@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password'];
+const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/auth/callback', '/onboarding'];
 const MANAGER_ROUTES = ['/manager'];
 const ADMIN_ROUTES = ['/admin'];
 
@@ -48,9 +48,14 @@ export async function proxy(request: NextRequest) {
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, is_admin')
+      .select('role, team, is_admin')
       .eq('id', user.id)
       .single();
+
+    // New Google user who hasn't picked a team yet
+    if (profile?.team === 'pending' && pathname !== '/onboarding') {
+      return NextResponse.redirect(new URL('/onboarding', request.url));
+    }
 
     // Protect /admin — only is_admin = true
     if (ADMIN_ROUTES.some(r => pathname.startsWith(r))) {

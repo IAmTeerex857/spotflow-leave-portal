@@ -1,100 +1,81 @@
 'use client';
-import Link from 'next/link';
 import { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
 export default function LoginForm() {
-  const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleGoogleSignIn = async () => {
     setLoading(true);
     setError('');
-
-    const form = e.currentTarget;
-    const email = (form.elements.namedItem('email') as HTMLInputElement).value;
-    const password = (form.elements.namedItem('password') as HTMLInputElement).value;
-
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          // Hint Google to only show work accounts
+          // hd restricts to a specific hosted domain
+          hd: 'spotflow.one',
+        },
+      },
+    });
 
     if (authError) {
       setError(authError.message);
       setLoading(false);
-      return;
     }
-
-    router.push('/dashboard');
-    router.refresh();
+    // On success, browser is redirected by Supabase — no need to do anything
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {/* Error message */}
-        {error && (
-          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '9px', padding: '10px 13px' }}>
-            <p style={{ fontSize: '13px', color: '#EF4444' }}>{error}</p>
-          </div>
-        )}
-
-        {/* Email */}
-        <div className="form-group">
-          <label className="form-label" htmlFor="email">Work email</label>
-          <div style={{ position: 'relative' }}>
-            <Mail size={15} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-            <input id="email" name="email" type="email" className="form-input" placeholder="you@spotflow.com" style={{ paddingLeft: '38px' }} autoComplete="off" required />
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {error && (
+        <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '9px', padding: '10px 13px' }}>
+          <p style={{ fontSize: '13px', color: '#EF4444' }}>{error}</p>
         </div>
+      )}
 
-        {/* Password */}
-        <div className="form-group">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label className="form-label" htmlFor="password">Password</label>
-            <Link href="/forgot-password" style={{ fontSize: '12px', color: 'var(--text-secondary)', textDecoration: 'none' }}>
-              Forgot password?
-            </Link>
-          </div>
-          <div style={{ position: 'relative' }}>
-            <Lock size={15} style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              className="form-input"
-              placeholder="••••••••"
-              style={{ paddingLeft: '38px', paddingRight: '42px' }}
-              autoComplete="current-password"
-              required
-            />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
-              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-          </div>
-        </div>
+      <button
+        id="google-signin"
+        onClick={handleGoogleSignIn}
+        disabled={loading}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+          width: '100%', padding: '12px 20px',
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: '10px', cursor: loading ? 'not-allowed' : 'pointer',
+          fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)',
+          transition: 'all 0.15s ease',
+          opacity: loading ? 0.7 : 1,
+        }}
+        onMouseEnter={e => {
+          if (!loading) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)';
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-strong)';
+        }}
+      >
+        <GoogleIcon />
+        {loading ? 'Redirecting…' : 'Continue with Google'}
+      </button>
 
-        {/* Submit */}
-        <button
-          id="login-submit"
-          type="submit"
-          className="btn btn-primary"
-          style={{ width: '100%', padding: '12px', marginTop: '4px', opacity: loading ? 0.7 : 1 }}
-          disabled={loading}
-        >
-          {loading ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
-
-      <p style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
-        Don&apos;t have an account?{' '}
-        <Link href="/signup" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 500 }}>
-          Sign up
-        </Link>
+      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+        Use your <strong style={{ color: 'var(--text-secondary)' }}>@spotflow.one</strong> work account to sign in.
       </p>
     </div>
   );
