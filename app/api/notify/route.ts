@@ -93,6 +93,39 @@ export async function POST(req: NextRequest) {
         })
       );
 
+      // Also CC engineering managers for any engineering-team requests
+      // (unless engineering_manager IS already the primary approver)
+      const engineeringRoles = [
+        'frontend_engineer', 'backend_engineer',
+        'frontend_line_manager', 'backend_line_manager',
+        'line_manager', 'engineer',
+      ];
+      const engineeringTeams = ['frontend', 'backend'];
+      const isEngineeringRequest =
+        engineeringRoles.includes(requester.role) ||
+        (requester.role === 'engineer' && engineeringTeams.includes(requester.team));
+
+      if (isEngineeringRequest && approverRole !== 'engineering_manager') {
+        const { data: engManagers } = await supabaseAdmin
+          .from('profiles')
+          .select('full_name, email')
+          .eq('role', 'engineering_manager');
+
+        if (engManagers && engManagers.length > 0) {
+          await Promise.all(
+            engManagers.map(async (mgr: { full_name: string; email: string }) => {
+              const { subject, html } = submittedEmail(leaveDetails, mgr.full_name);
+              return resend.emails.send({
+                from: 'Spotflow Leave <support@spotflow.one>',
+                to: mgr.email,
+                subject,
+                html,
+              });
+            })
+          );
+        }
+      }
+
       return NextResponse.json({ ok: true, sent: results.length });
 
     } else if (event === 'approved') {
