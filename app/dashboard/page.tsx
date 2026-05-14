@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import { format } from 'date-fns';
 import { PlusCircle, Clock, CheckCircle, XCircle, ChevronRight, ArrowUpRight, MapPin, Thermometer, User, FileText, MoreHorizontal, Pencil, Trash2, CalendarDays, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { getLeaveBalance, ANNUAL_ALLOWANCE, type LeaveBalance } from '@/lib/leave-balance';
+import { getLeaveBalance, type LeaveBalance } from '@/lib/leave-balance';
 import { countWorkingDays } from '@/lib/public-holidays';
 
 type Status = 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -411,7 +411,7 @@ export default function DashboardPage() {
               <div>
                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Leave Balance {new Date().getFullYear()}</p>
                 <p style={{ fontSize: '13px', color: 'var(--text-primary)', marginTop: '1px' }}>
-                  <strong>{balance.used}</strong> used · <strong>{balance.pending}</strong> pending · <strong style={{ color: balance.remaining <= 5 ? '#F59E0B' : '#22C55E' }}>{balance.remaining} remaining</strong> of {ANNUAL_ALLOWANCE}
+                  <strong>{balance.used}</strong> used · <strong>{balance.pending}</strong> pending · <strong style={{ color: balance.remaining <= 5 ? '#F59E0B' : '#22C55E' }}>{balance.remaining} remaining</strong> of {balance.allowance}
                 </p>
               </div>
             </div>
@@ -419,13 +419,13 @@ export default function DashboardPage() {
               <div style={{ height: '6px', borderRadius: '99px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', borderRadius: '99px',
-                  width: `${Math.min(100, Math.round((balance.used / ANNUAL_ALLOWANCE) * 100))}%`,
+                  width: `${Math.min(100, Math.round((balance.used / balance.allowance) * 100))}%`,
                   background: balance.remaining <= 5 ? '#EF4444' : balance.remaining <= 10 ? '#F59E0B' : '#22C55E',
                   transition: 'width 0.4s ease',
                 }} />
               </div>
               <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
-                {Math.round((balance.used / ANNUAL_ALLOWANCE) * 100)}% used
+                {Math.round((balance.used / balance.allowance) * 100)}% used
               </p>
             </div>
           </div>

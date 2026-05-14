@@ -56,34 +56,6 @@ export default function Hero() {
           gap: '28px',
         }}
       >
-        {/* Pill tag */}
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-strong)',
-            borderRadius: '999px',
-            padding: '5px 14px',
-            fontSize: '12px',
-            fontWeight: 500,
-            color: 'var(--text-muted)',
-            letterSpacing: '0.02em',
-          }}
-        >
-          <span
-            style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: 'var(--text-muted)',
-              display: 'inline-block',
-            }}
-          />
-          Internal tool — Spotflow Engineering
-        </div>
-
         {/* Headline */}
         <h1
           style={{
@@ -110,7 +82,7 @@ export default function Hero() {
           }}
         >
           A structured, auditable workflow for requesting, reviewing, and approving
-          leave across the engineering organisation.
+          leave across Spotflow.
         </p>
 
         {/* CTAs */}

@@ -116,7 +116,7 @@ export default function CalendarPage() {
         {/* Legend */}
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)' }} />
+            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'rgba(245,158,11,0.18)', border: '1px solid rgba(245,158,11,0.4)' }} />
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Public holiday</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -162,7 +162,7 @@ export default function CalendarPage() {
                       borderRight: (i + 1) % 7 === 0 ? 'none' : '1px solid var(--border)',
                       borderBottom: i < days.length - 7 ? '1px solid var(--border)' : 'none',
                       background: holiday
-                        ? 'rgba(255,255,255,0.02)'
+                        ? 'rgba(245,158,11,0.07)'
                         : isWeekendDay ? 'rgba(0,0,0,0.15)' : 'transparent',
                       opacity: inMonth ? 1 : 0.35,
                     }}
@@ -185,7 +185,7 @@ export default function CalendarPage() {
                     {/* Public holiday label */}
                     {holiday && (
                       <div style={{
-                        fontSize: '9px', fontWeight: 600, color: 'var(--text-muted)',
+                        fontSize: '9px', fontWeight: 700, color: '#F59E0B',
                         textTransform: 'uppercase', letterSpacing: '0.04em',
                         marginBottom: '3px', lineHeight: 1.2,
                       }}>

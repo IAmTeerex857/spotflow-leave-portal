@@ -2,10 +2,24 @@
 import AppShell from '@/components/layout/AppShell';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Shield, Save, CheckCircle, Gauge } from 'lucide-react';
-import { getAllLeaveBalances, ANNUAL_ALLOWANCE } from '@/lib/leave-balance';
+import { Shield, Save, CheckCircle } from 'lucide-react';
+import { getAllLeaveBalances } from '@/lib/leave-balance';
 
-type Role = 'engineer' | 'frontend_engineer' | 'backend_engineer' | 'product_designer' | 'product_manager' | 'frontend_line_manager' | 'backend_line_manager' | 'engineering_manager' | 'head_of_product' | 'line_manager';
+type Role =
+  | 'engineer'
+  | 'frontend_engineer'
+  | 'backend_engineer'
+  | 'qa_engineer'
+  | 'operations'
+  | 'marketing'
+  | 'product_designer'
+  | 'product_manager'
+  | 'frontend_line_manager'
+  | 'backend_line_manager'
+  | 'engineering_manager'
+  | 'head_of_product'
+  | 'head_of_operations'
+  | 'line_manager';
 
 interface Profile {
   id: string;
@@ -24,17 +38,23 @@ interface BalanceRow {
   used: number;
   pending: number;
   remaining: number;
+  allowance: number;
+  adjustment: number;
 }
 
 const ROLES: { value: Role; label: string }[] = [
   { value: 'frontend_engineer', label: 'Frontend Engineer' },
   { value: 'backend_engineer', label: 'Backend Engineer' },
+  { value: 'qa_engineer', label: 'QA Engineer' },
+  { value: 'operations', label: 'Operations' },
+  { value: 'marketing', label: 'Marketing' },
   { value: 'product_designer', label: 'Product Designer' },
   { value: 'product_manager', label: 'Product Manager' },
   { value: 'frontend_line_manager', label: 'Frontend Line Manager' },
   { value: 'backend_line_manager', label: 'Backend Line Manager' },
   { value: 'engineering_manager', label: 'Engineering Manager' },
   { value: 'head_of_product', label: 'Head of Product' },
+  { value: 'head_of_operations', label: 'Head of Operations' },
   { value: 'engineer', label: 'Engineer (default)' },
 ];
 
@@ -49,9 +69,16 @@ export default function AdminPage() {
   const [balances, setBalances] = useState<BalanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [balancesLoading, setBalancesLoading] = useState(false);
+
+  // Role management state
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [pendingRoles, setPendingRoles] = useState<Record<string, Role>>({});
+
+  // Balance adjustment state
+  const [pendingAdjustments, setPendingAdjustments] = useState<Record<string, number>>({});
+  const [adjustmentSaving, setAdjustmentSaving] = useState<string | null>(null);
+  const [adjustmentSaved, setAdjustmentSaved] = useState<string | null>(null);
 
   useEffect(() => { loadProfiles(); }, []);
   useEffect(() => {
@@ -60,7 +87,10 @@ export default function AdminPage() {
 
   const loadProfiles = async () => {
     const supabase = createClient();
-    const { data } = await supabase.from('profiles').select('id, full_name, email, team, role, is_admin').order('full_name');
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, team, role, is_admin')
+      .order('full_name');
     if (data) {
       setProfiles(data as Profile[]);
       const initial: Record<string, Role> = {};
@@ -73,7 +103,11 @@ export default function AdminPage() {
   const loadBalances = async () => {
     setBalancesLoading(true);
     const data = await getAllLeaveBalances();
-    setBalances(data as BalanceRow[]);
+    const rows = data as BalanceRow[];
+    setBalances(rows);
+    const initial: Record<string, number> = {};
+    rows.forEach(r => { initial[r.id] = r.adjustment ?? 0; });
+    setPendingAdjustments(initial);
     setBalancesLoading(false);
   };
 
@@ -91,7 +125,29 @@ export default function AdminPage() {
     setTimeout(() => setSaved(null), 2000);
   };
 
+  const handleAdjustmentSave = async (row: BalanceRow) => {
+    setAdjustmentSaving(row.id);
+    const supabase = createClient();
+    const newAdj = pendingAdjustments[row.id] ?? 0;
+    await supabase.from('profiles').update({ leave_balance_adjustment: newAdj }).eq('id', row.id);
+    // Update local balances to reflect new adjustment
+    setBalances(prev => prev.map(b => {
+      if (b.id !== row.id) return b;
+      const effectiveAllowance = 20 + newAdj;
+      return {
+        ...b,
+        adjustment: newAdj,
+        allowance: effectiveAllowance,
+        remaining: Math.max(0, effectiveAllowance - b.used),
+      };
+    }));
+    setAdjustmentSaving(null);
+    setAdjustmentSaved(row.id);
+    setTimeout(() => setAdjustmentSaved(null), 2000);
+  };
+
   const hasChanged = (id: string, currentRole: Role) => pendingRoles[id] !== currentRole;
+  const adjustmentChanged = (row: BalanceRow) => (pendingAdjustments[row.id] ?? 0) !== (row.adjustment ?? 0);
 
   const AvatarCircle = ({ name, size = 32 }: { name: string; size?: number }) => (
     <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size > 28 ? '14px' : '12px', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
@@ -144,7 +200,7 @@ export default function AdminPage() {
             <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <Shield size={14} style={{ color: 'var(--text-muted)', marginTop: '1px', flexShrink: 0 }} />
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                Role changes take effect immediately. Backend/Frontend Line Managers see only their respective team's requests. Engineering Manager sees all engineering requests.
+                Role changes take effect immediately. Line Managers see only their team's requests. Engineering Manager sees all engineering (frontend, backend, QA) requests. Head of Operations sees Operations and Marketing.
               </p>
             </div>
 
@@ -233,37 +289,67 @@ export default function AdminPage() {
         {/* ── Leave Balances Tab ── */}
         {tab === 'balances' && (
           <>
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <Shield size={14} style={{ color: 'var(--text-muted)', marginTop: '1px', flexShrink: 0 }} />
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Use the <strong style={{ color: 'var(--text-secondary)' }}>Adjust</strong> column to grant extra days (positive) or deduct days (negative) from an employee's annual allowance. Base allowance is 20 days.
+              </p>
+            </div>
+
             {/* Desktop table */}
             <div className="glass-card admin-desktop-table" style={{ overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 120px 2fr 80px 80px 80px 140px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
-                {['Member', 'Team', 'Role', 'Used', 'Pending', 'Left', 'Balance'].map(col => (
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 70px 70px 70px 120px 110px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
+                {['Member', 'Role', 'Used', 'Pending', 'Left', 'Adjust (days)', ''].map(col => (
                   <span key={col} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{col}</span>
                 ))}
               </div>
               {balancesLoading ? (
                 <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading balances…</div>
               ) : (
-                balances.sort((a, b) => a.remaining - b.remaining).map((b, i) => {
-                  const pct = Math.min(100, Math.round((b.used / ANNUAL_ALLOWANCE) * 100));
+                [...balances].sort((a, b) => a.remaining - b.remaining).map((b, i) => {
+                  const effectiveAllowance = b.allowance ?? 20;
+                  const pct = Math.min(100, Math.round((b.used / effectiveAllowance) * 100));
                   const low = b.remaining <= 5;
+                  const currentAdj = pendingAdjustments[b.id] ?? 0;
                   return (
-                    <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '2fr 120px 2fr 80px 80px 80px 140px', padding: '14px 20px', borderBottom: i < balances.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center', transition: 'background 0.12s ease' }}
+                    <div key={b.id}
+                      style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 70px 70px 70px 120px 110px', padding: '14px 20px', borderBottom: i < balances.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center', transition: 'background 0.12s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <AvatarCircle name={b.full_name} size={28} />
                         <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{b.full_name}</span>
                       </div>
-                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{b.team}</span>
                       <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{roleLabel(b.role)}</span>
                       <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{b.used}d</span>
                       <span style={{ fontSize: '12px', color: '#F59E0B' }}>{b.pending > 0 ? `+${b.pending}d` : '—'}</span>
                       <span style={{ fontSize: '13px', fontWeight: 600, color: low ? '#EF4444' : '#22C55E' }}>{b.remaining}d</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ flex: 1, height: '5px', borderRadius: '99px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: '99px', width: `${pct}%`, background: pct >= 90 ? '#EF4444' : pct >= 70 ? '#F59E0B' : '#22C55E', transition: 'width 0.3s ease' }} />
-                        </div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', minWidth: '28px' }}>{pct}%</span>
+                      {/* Adjustment input */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <input
+                          type="number"
+                          value={currentAdj}
+                          onChange={e => setPendingAdjustments(prev => ({ ...prev, [b.id]: Number(e.target.value) }))}
+                          className="form-input"
+                          style={{ fontSize: '13px', padding: '6px 10px', width: '72px', textAlign: 'center' }}
+                        />
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          = {effectiveAllowance + (currentAdj - (b.adjustment ?? 0))}d total
+                        </span>
+                      </div>
+                      <div>
+                        {adjustmentSaved === b.id ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#22C55E', fontWeight: 500 }}><CheckCircle size={13} /> Saved</span>
+                        ) : (
+                          <button
+                            onClick={() => handleAdjustmentSave(b)}
+                            disabled={!adjustmentChanged(b) || adjustmentSaving === b.id}
+                            className="btn btn-ghost"
+                            style={{ fontSize: '12px', padding: '6px 14px', opacity: adjustmentChanged(b) ? 1 : 0.35 }}
+                          >
+                            {adjustmentSaving === b.id ? 'Saving…' : <><Save size={12} /> Save</>}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -276,9 +362,11 @@ export default function AdminPage() {
               {balancesLoading ? (
                 <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading balances…</div>
               ) : (
-                balances.sort((a, b) => a.remaining - b.remaining).map(b => {
-                  const pct = Math.min(100, Math.round((b.used / ANNUAL_ALLOWANCE) * 100));
+                [...balances].sort((a, b) => a.remaining - b.remaining).map(b => {
+                  const effectiveAllowance = b.allowance ?? 20;
+                  const pct = Math.min(100, Math.round((b.used / effectiveAllowance) * 100));
                   const low = b.remaining <= 5;
+                  const currentAdj = pendingAdjustments[b.id] ?? 0;
                   return (
                     <div key={b.id} className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
@@ -286,7 +374,7 @@ export default function AdminPage() {
                           <AvatarCircle name={b.full_name} size={36} />
                           <div>
                             <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{b.full_name}</p>
-                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', textTransform: 'capitalize' }}>{b.team} · {roleLabel(b.role)}</p>
+                            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', textTransform: 'capitalize' }}>{roleLabel(b.role)}</p>
                           </div>
                         </div>
                         <span style={{ fontSize: '13px', fontWeight: 700, color: low ? '#EF4444' : '#22C55E', flexShrink: 0 }}>{b.remaining}d left</span>
@@ -307,7 +395,37 @@ export default function AdminPage() {
                         <div style={{ height: '6px', borderRadius: '99px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
                           <div style={{ height: '100%', borderRadius: '99px', width: `${pct}%`, background: pct >= 90 ? '#EF4444' : pct >= 70 ? '#F59E0B' : '#22C55E', transition: 'width 0.3s ease' }} />
                         </div>
-                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>{pct}% of {ANNUAL_ALLOWANCE}d used</p>
+                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>{pct}% of {effectiveAllowance}d used</p>
+                      </div>
+                      {/* Adjustment */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '4px', borderTop: '1px solid var(--border)' }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Balance adjustment (days)</p>
+                          <input
+                            type="number"
+                            value={currentAdj}
+                            onChange={e => setPendingAdjustments(prev => ({ ...prev, [b.id]: Number(e.target.value) }))}
+                            className="form-input"
+                            style={{ fontSize: '14px', padding: '8px 12px', width: '100%', textAlign: 'center' }}
+                          />
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            Total allowance: <strong style={{ color: 'var(--text-secondary)' }}>{20 + currentAdj}d</strong>
+                          </p>
+                        </div>
+                        <div style={{ paddingTop: '20px' }}>
+                          {adjustmentSaved === b.id ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#22C55E', fontWeight: 500 }}><CheckCircle size={14} /> Saved</span>
+                          ) : (
+                            <button
+                              onClick={() => handleAdjustmentSave(b)}
+                              disabled={!adjustmentChanged(b) || adjustmentSaving === b.id}
+                              className="btn btn-ghost"
+                              style={{ fontSize: '13px', padding: '10px 16px', opacity: adjustmentChanged(b) ? 1 : 0.35 }}
+                            >
+                              {adjustmentSaving === b.id ? 'Saving…' : <><Save size={13} /> Save</>}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

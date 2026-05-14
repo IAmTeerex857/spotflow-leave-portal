@@ -2,11 +2,10 @@
 import AppShell from '@/components/layout/AppShell';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
 import { CalendarDays, FileText, AlignLeft, Users, AlertTriangle, Info } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { countWorkingDays, getHolidayName, PUBLIC_HOLIDAYS } from '@/lib/public-holidays';
-import { getLeaveBalance, ANNUAL_ALLOWANCE } from '@/lib/leave-balance';
+import { countWorkingDays, PUBLIC_HOLIDAYS } from '@/lib/public-holidays';
+import { getLeaveBalance } from '@/lib/leave-balance';
 
 const LEAVE_TYPES = [
   { value: 'annual', label: 'Annual Leave' },
@@ -21,8 +20,7 @@ export default function NewRequestPage() {
   const [endDate, setEndDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [balance, setBalance] = useState<{ used: number; remaining: number } | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [balance, setBalance] = useState<{ used: number; remaining: number; allowance: number; adjustment: number } | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
 
   useEffect(() => {
@@ -30,7 +28,6 @@ export default function NewRequestPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      setUserId(user.id);
       const b = await getLeaveBalance(user.id);
       setBalance(b);
     };
@@ -46,10 +43,10 @@ export default function NewRequestPage() {
     ? PUBLIC_HOLIDAYS.filter(h => h.date >= startDate && h.date <= endDate)
     : [];
 
-  const remaining = balance?.remaining ?? ANNUAL_ALLOWANCE;
+  const remaining = balance?.remaining ?? 20;
   const wouldExceed = workingDays > 0 && workingDays > remaining;
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (wouldExceed) {
@@ -64,6 +61,7 @@ export default function NewRequestPage() {
     const leaveType = (form.elements.namedItem('leave-type') as HTMLSelectElement).value;
     const reason = (form.elements.namedItem('reason') as HTMLTextAreaElement).value;
     const coverNotes = (form.elements.namedItem('cover') as HTMLTextAreaElement).value;
+    const coverPersonEmail = (form.elements.namedItem('cover-person-email') as HTMLInputElement).value;
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -77,6 +75,7 @@ export default function NewRequestPage() {
       duration_days: workingDays,
       reason,
       cover_notes: coverNotes || null,
+      cover_person_email: coverPersonEmail || null,
       status: 'pending',
     });
 
@@ -138,7 +137,7 @@ export default function NewRequestPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px 14px' }}>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Remaining:</span>
             <span style={{ fontSize: '14px', fontWeight: 700, color: balance.remaining <= 5 ? '#F59E0B' : 'var(--text-primary)' }}>
-              {balance.remaining} / {ANNUAL_ALLOWANCE}d
+              {balance.remaining} / {balance.allowance}d
             </span>
           </div>
         )}
@@ -232,9 +231,26 @@ export default function NewRequestPage() {
               {/* Cover */}
               <div className="form-group">
                 <label className="form-label" htmlFor="cover">
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Users size={13} /> Cover arrangements <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>(optional)</span></span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Users size={13} /> Cover notes <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>(optional)</span></span>
                 </label>
-                <textarea id="cover" name="cover" className="form-input" placeholder="Who will cover your responsibilities? Any handover notes?" />
+                <textarea id="cover" name="cover" className="form-input" placeholder="Describe what your cover person will be handling and any handover notes…" />
+              </div>
+
+              {/* Cover person email */}
+              <div className="form-group">
+                <label className="form-label" htmlFor="cover-person-email">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Users size={13} /> Cover person's email <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>(optional)</span></span>
+                </label>
+                <input
+                  id="cover-person-email"
+                  name="cover-person-email"
+                  type="email"
+                  className="form-input"
+                  placeholder="colleague@spotflow.one"
+                />
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px' }}>
+                  They'll receive an email letting them know they're covering your work during this period.
+                </p>
               </div>
 
               <div className="divider" style={{ margin: '0' }} />

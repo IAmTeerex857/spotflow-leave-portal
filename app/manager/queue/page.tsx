@@ -73,7 +73,7 @@ export default function ManagerQueuePage() {
         setRequests(data as unknown as Request[]);
         // Fetch balances for each unique requester
         const year = new Date().getFullYear();
-        const uniqueIds = [...new Set(data.map((r: any) => r.requester_id))];
+        const uniqueIds = [...new Set(data.map(r => (r as unknown as { requester_id: string }).requester_id))];
         const { data: approved } = await supabase
           .from('leave_requests')
           .select('requester_id, duration_days')
@@ -83,8 +83,10 @@ export default function ManagerQueuePage() {
           .lte('start_date', `${year}-12-31`);
 
         const usedMap: Record<string, number> = {};
-        approved?.forEach((l: any) => {
-          usedMap[l.requester_id] = (usedMap[l.requester_id] ?? 0) + (l.duration_days ?? 0);
+        approved?.forEach(l => {
+          const id = l.requester_id as string;
+          const days = (l.duration_days as number) ?? 0;
+          usedMap[id] = (usedMap[id] ?? 0) + days;
         });
         setBalances(usedMap);
       }
