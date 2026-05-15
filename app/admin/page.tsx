@@ -2,7 +2,7 @@
 import AppShell from '@/components/layout/AppShell';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Shield, Save, CheckCircle } from 'lucide-react';
+import { Shield, Save, CheckCircle, Pencil, X } from 'lucide-react';
 import { getAllLeaveBalances } from '@/lib/leave-balance';
 
 type Role =
@@ -79,6 +79,7 @@ export default function AdminPage() {
   const [pendingAdjustments, setPendingAdjustments] = useState<Record<string, number>>({});
   const [adjustmentSaving, setAdjustmentSaving] = useState<string | null>(null);
   const [adjustmentSaved, setAdjustmentSaved] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => { loadProfiles(); }, []);
   useEffect(() => {
@@ -143,7 +144,13 @@ export default function AdminPage() {
     }));
     setAdjustmentSaving(null);
     setAdjustmentSaved(row.id);
+    setEditingId(null);
     setTimeout(() => setAdjustmentSaved(null), 2000);
+  };
+
+  const handleCancelEdit = (row: BalanceRow) => {
+    setPendingAdjustments(prev => ({ ...prev, [row.id]: row.adjustment ?? 0 }));
+    setEditingId(null);
   };
 
   const hasChanged = (id: string, currentRole: Role) => pendingRoles[id] !== currentRole;
@@ -289,17 +296,68 @@ export default function AdminPage() {
         {/* ── Leave Balances Tab ── */}
         {tab === 'balances' && (
           <>
+            {/* Balance edit modal */}
+            {editingId && (() => {
+              const editRow = balances.find(b => b.id === editingId)!;
+              const currentAdj = pendingAdjustments[editingId] ?? 0;
+              return (
+                <div className="modal-overlay" onClick={() => handleCancelEdit(editRow)}>
+                  <div className="modal-card scale-in" onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                      <AvatarCircle name={editRow.full_name} size={40} />
+                      <div>
+                        <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>{editRow.full_name}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{roleLabel(editRow.role)}</p>
+                      </div>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '8px' }}>
+                      <label className="form-label" htmlFor="adj-input">Adjustment (days)</label>
+                      <input
+                        id="adj-input"
+                        type="number"
+                        autoFocus
+                        value={currentAdj}
+                        onChange={e => setPendingAdjustments(prev => ({ ...prev, [editingId]: Number(e.target.value) }))}
+                        className="form-input"
+                        style={{ textAlign: 'center', fontSize: '20px', fontWeight: 700 }}
+                      />
+                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px', textAlign: 'center' }}>
+                      Total allowance: <strong style={{ color: 'var(--text-secondary)' }}>{20 + currentAdj} days</strong>
+                      {currentAdj !== 0 && (
+                        <span style={{ color: currentAdj > 0 ? '#22C55E' : '#EF4444', marginLeft: '6px' }}>
+                          ({currentAdj > 0 ? '+' : ''}{currentAdj}d adj.)
+                        </span>
+                      )}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                      <button className="btn btn-ghost" onClick={() => handleCancelEdit(editRow)}>
+                        <X size={14} /> Cancel
+                      </button>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => handleAdjustmentSave(editRow)}
+                        disabled={adjustmentSaving === editingId}
+                      >
+                        {adjustmentSaving === editingId ? 'Saving…' : <><Save size={14} /> Save</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
               <Shield size={14} style={{ color: 'var(--text-muted)', marginTop: '1px', flexShrink: 0 }} />
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                Use the <strong style={{ color: 'var(--text-secondary)' }}>Adjust</strong> column to grant extra days (positive) or deduct days (negative) from an employee's annual allowance. Base allowance is 20 days.
+                Click the <strong style={{ color: 'var(--text-secondary)' }}>pencil icon</strong> next to a member to grant extra days (positive) or deduct days (negative) from their annual allowance. Base allowance is 20 days.
               </p>
             </div>
 
             {/* Desktop table */}
             <div className="glass-card admin-desktop-table" style={{ overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 70px 70px 70px 120px 110px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
-                {['Member', 'Role', 'Used', 'Pending', 'Left', 'Adjust (days)', ''].map(col => (
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 70px 70px 70px 44px', padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
+                {['Member', 'Role', 'Used', 'Pending', 'Left', ''].map(col => (
                   <span key={col} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{col}</span>
                 ))}
               </div>
@@ -307,13 +365,10 @@ export default function AdminPage() {
                 <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading balances…</div>
               ) : (
                 [...balances].sort((a, b) => a.remaining - b.remaining).map((b, i) => {
-                  const effectiveAllowance = b.allowance ?? 20;
-                  const pct = Math.min(100, Math.round((b.used / effectiveAllowance) * 100));
                   const low = b.remaining <= 5;
-                  const currentAdj = pendingAdjustments[b.id] ?? 0;
                   return (
                     <div key={b.id}
-                      style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 70px 70px 70px 120px 110px', padding: '14px 20px', borderBottom: i < balances.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center', transition: 'background 0.12s ease' }}
+                      style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 70px 70px 70px 44px', padding: '14px 20px', borderBottom: i < balances.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'center', transition: 'background 0.12s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -324,30 +379,18 @@ export default function AdminPage() {
                       <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{b.used}d</span>
                       <span style={{ fontSize: '12px', color: '#F59E0B' }}>{b.pending > 0 ? `+${b.pending}d` : '—'}</span>
                       <span style={{ fontSize: '13px', fontWeight: 600, color: low ? '#EF4444' : '#22C55E' }}>{b.remaining}d</span>
-                      {/* Adjustment input */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <input
-                          type="number"
-                          value={currentAdj}
-                          onChange={e => setPendingAdjustments(prev => ({ ...prev, [b.id]: Number(e.target.value) }))}
-                          className="form-input"
-                          style={{ fontSize: '13px', padding: '6px 10px', width: '72px', textAlign: 'center' }}
-                        />
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                          = {effectiveAllowance + (currentAdj - (b.adjustment ?? 0))}d total
-                        </span>
-                      </div>
-                      <div>
+                      {/* Edit action */}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                         {adjustmentSaved === b.id ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#22C55E', fontWeight: 500 }}><CheckCircle size={13} /> Saved</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#22C55E', fontWeight: 500 }}><CheckCircle size={12} /></span>
                         ) : (
                           <button
-                            onClick={() => handleAdjustmentSave(b)}
-                            disabled={!adjustmentChanged(b) || adjustmentSaving === b.id}
+                            onClick={() => setEditingId(b.id)}
                             className="btn btn-ghost"
-                            style={{ fontSize: '12px', padding: '6px 14px', opacity: adjustmentChanged(b) ? 1 : 0.35 }}
+                            style={{ padding: '6px 8px', color: 'var(--text-muted)' }}
+                            title={`Edit allowance (current: ${(b.adjustment ?? 0) >= 0 ? '+' : ''}${b.adjustment ?? 0}d)`}
                           >
-                            {adjustmentSaving === b.id ? 'Saving…' : <><Save size={12} /> Save</>}
+                            <Pencil size={13} />
                           </button>
                         )}
                       </div>
@@ -366,7 +409,6 @@ export default function AdminPage() {
                   const effectiveAllowance = b.allowance ?? 20;
                   const pct = Math.min(100, Math.round((b.used / effectiveAllowance) * 100));
                   const low = b.remaining <= 5;
-                  const currentAdj = pendingAdjustments[b.id] ?? 0;
                   return (
                     <div key={b.id} className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
@@ -398,34 +440,22 @@ export default function AdminPage() {
                         <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>{pct}% of {effectiveAllowance}d used</p>
                       </div>
                       {/* Adjustment */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '4px', borderTop: '1px solid var(--border)' }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Balance adjustment (days)</p>
-                          <input
-                            type="number"
-                            value={currentAdj}
-                            onChange={e => setPendingAdjustments(prev => ({ ...prev, [b.id]: Number(e.target.value) }))}
-                            className="form-input"
-                            style={{ fontSize: '14px', padding: '8px 12px', width: '100%', textAlign: 'center' }}
-                          />
-                          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                            Total allowance: <strong style={{ color: 'var(--text-secondary)' }}>{20 + currentAdj}d</strong>
-                          </p>
-                        </div>
-                        <div style={{ paddingTop: '20px' }}>
-                          {adjustmentSaved === b.id ? (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#22C55E', fontWeight: 500 }}><CheckCircle size={14} /> Saved</span>
-                          ) : (
-                            <button
-                              onClick={() => handleAdjustmentSave(b)}
-                              disabled={!adjustmentChanged(b) || adjustmentSaving === b.id}
-                              className="btn btn-ghost"
-                              style={{ fontSize: '13px', padding: '10px 16px', opacity: adjustmentChanged(b) ? 1 : 0.35 }}
-                            >
-                              {adjustmentSaving === b.id ? 'Saving…' : <><Save size={13} /> Save</>}
-                            </button>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px', borderTop: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          Allowance: <strong style={{ color: 'var(--text-secondary)' }}>{effectiveAllowance}d</strong>
+                          {(b.adjustment ?? 0) !== 0 && (
+                            <span style={{ color: (b.adjustment ?? 0) > 0 ? '#22C55E' : '#EF4444', marginLeft: '5px', fontSize: '11px' }}>
+                              ({(b.adjustment ?? 0) > 0 ? '+' : ''}{b.adjustment}d adj.)
+                            </span>
                           )}
-                        </div>
+                        </span>
+                        {adjustmentSaved === b.id ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#22C55E', fontWeight: 500 }}><CheckCircle size={13} /> Saved</span>
+                        ) : (
+                          <button onClick={() => setEditingId(b.id)} className="btn btn-ghost" style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>
+                            <Pencil size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

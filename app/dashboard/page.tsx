@@ -4,7 +4,7 @@ import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useEffect, useState, useRef } from 'react';
 import { format } from 'date-fns';
-import { PlusCircle, Clock, CheckCircle, XCircle, ChevronRight, ArrowUpRight, MapPin, Thermometer, User, FileText, MoreHorizontal, Pencil, Trash2, CalendarDays, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Clock, CheckCircle, XCircle, ArrowUpRight, MapPin, Thermometer, User, FileText, MoreHorizontal, Pencil, Trash2, CalendarDays, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getLeaveBalance, type LeaveBalance } from '@/lib/leave-balance';
 import { countWorkingDays } from '@/lib/public-holidays';
@@ -179,7 +179,7 @@ function DeleteModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (
         </p>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-danger" onClick={async () => { setDeleting(true); await onConfirm(); setDeleting(false); }} disabled={deleting} style={{ opacity: deleting ? 0.7 : 1 }}>
+          <button className="btn btn-danger" onClick={() => { setDeleting(true); onConfirm(); setDeleting(false); }} disabled={deleting} style={{ opacity: deleting ? 0.7 : 1 }}>
             <Trash2 size={13} /> {deleting ? 'Deleting…' : 'Delete'}
           </button>
         </div>
@@ -403,30 +403,49 @@ export default function DashboardPage() {
 
         {/* Balance widget */}
         {balance && (
-          <div className="glass-card balance-widget" style={{ padding: '16px 20px', marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Clock size={16} style={{ color: 'var(--text-secondary)' }} />
+          <div className="glass-card balance-widget" style={{ padding: '20px 24px', marginBottom: '28px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
+              {/* Icon + days left */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Clock size={17} style={{ color: 'var(--text-secondary)' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>Leave Balance {new Date().getFullYear()}</p>
+                  <p style={{ lineHeight: 1 }}>
+                    <span style={{ fontSize: '24px', fontWeight: 800, color: balance.remaining <= 5 ? '#F59E0B' : 'var(--text-primary)' }}>{balance.remaining}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '6px' }}>days left</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Leave Balance {new Date().getFullYear()}</p>
-                <p style={{ fontSize: '13px', color: 'var(--text-primary)', marginTop: '1px' }}>
-                  <strong>{balance.used}</strong> used · <strong>{balance.pending}</strong> pending · <strong style={{ color: balance.remaining <= 5 ? '#F59E0B' : '#22C55E' }}>{balance.remaining} remaining</strong> of {balance.allowance}
+
+              {/* Used + Pending stat chips */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {[
+                  { label: 'Used', value: `${balance.used}d`, color: 'var(--text-primary)' },
+                  { label: 'Pending', value: `${balance.pending}d`, color: balance.pending > 0 ? '#F59E0B' : 'var(--text-muted)' },
+                ].map(stat => (
+                  <div key={stat.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px 16px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>{stat.label}</p>
+                    <p style={{ fontSize: '15px', fontWeight: 700, color: stat.color, lineHeight: 1 }}>{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Progress bar */}
+              <div className="balance-bar" style={{ flex: 1, minWidth: '140px', maxWidth: '200px' }}>
+                <div style={{ height: '6px', borderRadius: '99px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: '99px',
+                    width: `${Math.min(100, Math.round((balance.used / balance.allowance) * 100))}%`,
+                    background: balance.remaining <= 5 ? '#EF4444' : balance.remaining <= 10 ? '#F59E0B' : '#22C55E',
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px', textAlign: 'right' }}>
+                  {Math.round((balance.used / balance.allowance) * 100)}% of {balance.allowance}d used
                 </p>
               </div>
-            </div>
-            <div className="balance-bar" style={{ flex: 1, minWidth: '160px', maxWidth: '240px' }}>
-              <div style={{ height: '6px', borderRadius: '99px', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', borderRadius: '99px',
-                  width: `${Math.min(100, Math.round((balance.used / balance.allowance) * 100))}%`,
-                  background: balance.remaining <= 5 ? '#EF4444' : balance.remaining <= 10 ? '#F59E0B' : '#22C55E',
-                  transition: 'width 0.4s ease',
-                }} />
-              </div>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
-                {Math.round((balance.used / balance.allowance) * 100)}% used
-              </p>
             </div>
           </div>
         )}
