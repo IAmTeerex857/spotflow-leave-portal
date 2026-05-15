@@ -30,16 +30,8 @@ ALTER TABLE profiles
     'line_manager'
   ));
 
--- 3. Drop the old team constraint
+-- 3. Drop the old team constraint (no replacement — some existing rows have
+--    team values outside any fixed list, and team is already validated at
+--    the app level via dropdowns).
 ALTER TABLE profiles
   DROP CONSTRAINT IF EXISTS profiles_team_check;
-
--- 4. Add updated team constraint
-ALTER TABLE profiles
-  ADD CONSTRAINT profiles_team_check CHECK (team IN (
-    'backend',
-    'frontend',
-    'product',
-    'operations',
-    'marketing'
-  ));
