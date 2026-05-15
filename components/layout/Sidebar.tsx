@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, PlusCircle, ClipboardList, History, LogOut, ChevronRight, UserCog, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, ClipboardList, History, LogOut, ChevronRight, UserCog, CalendarDays, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useEffect, useState } from 'react';
 
@@ -40,6 +40,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
   const pathname = usePathname();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -170,7 +171,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
             <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{teamLabel}</p>
           </div>
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: '4px' }}
             title="Log out"
           >
@@ -178,6 +179,27 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
           </button>
         </div>
       </div>
+
+      {/* Logout confirmation modal */}
+      {showLogoutConfirm && (
+        <div className="modal-overlay" onClick={() => setShowLogoutConfirm(false)}>
+          <div className="modal-card scale-in" onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '11px', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+              <AlertTriangle size={20} style={{ color: 'var(--text-secondary)' }} />
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>Log out?</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '20px' }}>
+              You'll be returned to the login page.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button className="btn btn-ghost" onClick={() => setShowLogoutConfirm(false)}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleLogout}>
+                <LogOut size={13} /> Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
