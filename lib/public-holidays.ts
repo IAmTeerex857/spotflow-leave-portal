@@ -65,7 +65,7 @@ export function countWorkingDays(startDate: Date, endDate: Date): number {
 
   while (current <= end) {
     if (!isWeekend(current)) {
-      const dateStr = current.toISOString().split('T')[0];
+      const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
       if (!isPublicHoliday(dateStr)) {
         count++;
       }
