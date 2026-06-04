@@ -150,8 +150,10 @@ export default function CalendarPage() {
                 const inMonth = isSameMonth(day, month);
                 const today = isToday(day);
                 const holiday = isPublicHoliday(dateStr) ? getHolidayName(dateStr) : null;
-                const dayLeaves = leaves.filter(l => isLeaveOnDay(l, dateStr));
                 const isWeekendDay = day.getDay() === 0 || day.getDay() === 6;
+                const dayLeaves = (!isWeekendDay && !holiday)
+                  ? leaves.filter(l => isLeaveOnDay(l, dateStr))
+                  : [];
 
                 return (
                   <div
