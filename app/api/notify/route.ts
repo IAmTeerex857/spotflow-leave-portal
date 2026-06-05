@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { format } from 'date-fns';
+import { google } from 'googleapis';
 import {
   submittedEmail,
   approvedEmail,
   rejectedEmail,
+  emVettingEmail,
   lineManagerActionEmail,
   headOfProductObserverEmail,
   coverPersonEmail,
@@ -12,7 +15,6 @@ import {
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Service-role Supabase client — bypasses RLS, server-side only
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -20,37 +22,29 @@ const supabaseAdmin = createClient(
 
 const FROM = 'Spotflow Leave <support@spotflow.one>';
 
-type NotifyEvent = 'submitted' | 'approved' | 'rejected';
+type NotifyEvent = 'submitted' | 'approved' | 'rejected' | 'em_review';
 
-// Line manager roles — when they approve/reject, engineering_manager gets notified
 const LINE_MANAGER_ROLES = ['frontend_line_manager', 'backend_line_manager', 'line_manager'];
 
-// Engineering-team roles — engineering_manager is CC'd on submission
 const ENGINEERING_ROLES = [
   'frontend_engineer', 'backend_engineer', 'qa_engineer',
   'frontend_line_manager', 'backend_line_manager', 'line_manager', 'engineer',
 ];
 const ENGINEERING_TEAMS = ['frontend', 'backend'];
 
-/** Determine which manager role is the primary approver for a given requester */
 function getApproverRole(requesterRole: string, requesterTeam: string): string {
   if (requesterRole === 'frontend_engineer') return 'frontend_line_manager';
   if (requesterRole === 'backend_engineer') return 'backend_line_manager';
-  // Generic engineer — use team to route
   if (requesterRole === 'engineer' && requesterTeam === 'frontend') return 'frontend_line_manager';
   if (requesterRole === 'engineer' && requesterTeam === 'backend') return 'backend_line_manager';
-  // QA engineer reports directly to engineering manager
   if (requesterRole === 'qa_engineer') return 'engineering_manager';
-  // Operations and marketing → head of operations
   if (requesterRole === 'operations') return 'head_of_operations';
   if (requesterRole === 'marketing') return 'head_of_operations';
-  // Product roles → head of product
   if (requesterRole === 'product_designer') return 'head_of_product';
   if (requesterRole === 'product_manager') return 'head_of_product';
-  // Line managers → engineering manager
   if (LINE_MANAGER_ROLES.includes(requesterRole)) return 'engineering_manager';
   if (requesterRole === 'engineering_manager') return 'head_of_product';
-  return 'engineering_manager'; // safe fallback
+  return 'engineering_manager';
 }
 
 async function getProfilesByRole(role: string): Promise<{ full_name: string; email: string }[]> {
@@ -62,6 +56,53 @@ async function getProfilesByRole(role: string): Promise<{ full_name: string; ema
   return data ?? [];
 }
 
+/** Create a Google Calendar event on the requester's primary calendar */
+async function createCalendarEvent(userId: string, details: {
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+}) {
+  const { data: tokenRow } = await supabaseAdmin
+    .from('user_tokens')
+    .select('refresh_token')
+    .eq('user_id', userId)
+    .eq('provider', 'google')
+    .single();
+
+  if (!tokenRow?.refresh_token) return; // no token stored yet — skip silently
+
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
+  oauth2Client.setCredentials({ refresh_token: tokenRow.refresh_token });
+
+  const leaveTypeLabels: Record<string, string> = {
+    annual: 'Annual Leave',
+    sick: 'Sick Leave',
+    personal: 'Personal Leave',
+    other: 'Leave',
+  };
+
+  // Google Calendar all-day events use an exclusive end date
+  const endExclusive = new Date(details.endDate);
+  endExclusive.setDate(endExclusive.getDate() + 1);
+  const endDateStr = format(endExclusive, 'yyyy-MM-dd');
+
+  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+  await calendar.events.insert({
+    calendarId: 'primary',
+    requestBody: {
+      summary: leaveTypeLabels[details.leaveType] ?? 'Leave',
+      start: { date: details.startDate },
+      end: { date: endDateStr },
+      description: `Approved via Spotflow Leave Portal.\n\nReason: ${details.reason}`,
+      status: 'confirmed',
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { event, requestId } = (await req.json()) as { event: NotifyEvent; requestId: string };
@@ -70,7 +111,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing event or requestId' }, { status: 400 });
     }
 
-    // Fetch the leave request — include cover_person_email and approver profile
     const { data: leave, error: leaveErr } = await supabaseAdmin
       .from('leave_requests')
       .select(`
@@ -118,7 +158,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, warning: 'No approver found' });
       }
 
-      // Notify all primary approvers
       await Promise.all(
         primaryApprovers.map((a) => {
           const { subject, html } = submittedEmail(leaveDetails, a.full_name);
@@ -126,8 +165,6 @@ export async function POST(req: NextRequest) {
         })
       );
 
-      // CC engineering_manager on engineering-team submissions
-      // (unless engineering_manager IS already the primary approver)
       const isEngineeringRequest =
         ENGINEERING_ROLES.includes(requester.role) ||
         (requester.role === 'engineer' && ENGINEERING_TEAMS.includes(requester.team));
@@ -142,7 +179,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Notify cover person if one was specified
       const coverEmail = leave.cover_person_email as string | null;
       if (coverEmail) {
         const { subject, html } = coverPersonEmail(leaveDetails, coverEmail);
@@ -153,14 +189,34 @@ export async function POST(req: NextRequest) {
     }
 
     // ------------------------------------------------------------------
-    // APPROVED
+    // EM_REVIEW — line manager approved, notify EM to vet
+    // ------------------------------------------------------------------
+    if (event === 'em_review') {
+      const lineManagerName = approver?.full_name ?? 'Line Manager';
+      const engManagers = await getProfilesByRole('engineering_manager');
+
+      if (engManagers.length === 0) {
+        console.warn('No engineering_manager found for EM vetting notification');
+        return NextResponse.json({ ok: true, warning: 'No EM found' });
+      }
+
+      await Promise.all(
+        engManagers.map((m) => {
+          const { subject, html } = emVettingEmail(leaveDetails, m.full_name, lineManagerName);
+          return resend.emails.send({ from: FROM, to: m.email, subject, html });
+        })
+      );
+
+      return NextResponse.json({ ok: true, sent: engManagers.length });
+    }
+
+    // ------------------------------------------------------------------
+    // APPROVED — final approval: email engineer + create calendar event
     // ------------------------------------------------------------------
     if (event === 'approved') {
-      // 1. Notify requester
       const { subject: reqSubject, html: reqHtml } = approvedEmail(leaveDetails);
       await resend.emails.send({ from: FROM, to: requester.email, subject: reqSubject, html: reqHtml });
 
-      // 2. If a line manager approved, notify engineering_manager
       if (approver && LINE_MANAGER_ROLES.includes(approver.role)) {
         const engManagers = await getProfilesByRole('engineering_manager');
         await Promise.all(
@@ -171,7 +227,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // 3. Notify head_of_product as company-wide observer
       const approverName = approver?.full_name ?? 'Your manager';
       const hops = await getProfilesByRole('head_of_product');
       await Promise.all(
@@ -181,6 +236,14 @@ export async function POST(req: NextRequest) {
         })
       );
 
+      // Google Calendar event — fire-and-forget, non-blocking
+      createCalendarEvent(requester.id, {
+        leaveType: leave.leave_type,
+        startDate: leave.start_date,
+        endDate: leave.end_date,
+        reason: leave.reason ?? '',
+      }).catch(err => console.warn('Calendar event creation failed:', err));
+
       return NextResponse.json({ ok: true });
     }
 
@@ -188,11 +251,9 @@ export async function POST(req: NextRequest) {
     // REJECTED
     // ------------------------------------------------------------------
     if (event === 'rejected') {
-      // 1. Notify requester
       const { subject: reqSubject, html: reqHtml } = rejectedEmail(leaveDetails);
       await resend.emails.send({ from: FROM, to: requester.email, subject: reqSubject, html: reqHtml });
 
-      // 2. If a line manager rejected, notify engineering_manager
       if (approver && LINE_MANAGER_ROLES.includes(approver.role)) {
         const engManagers = await getProfilesByRole('engineering_manager');
         await Promise.all(
@@ -203,7 +264,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // 3. Notify head_of_product as company-wide observer
       const approverName = approver?.full_name ?? 'Your manager';
       const hops = await getProfilesByRole('head_of_product');
       await Promise.all(

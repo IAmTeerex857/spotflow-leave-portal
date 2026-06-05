@@ -1,7 +1,8 @@
-type Status = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type Status = 'pending' | 'pending_em_review' | 'approved' | 'rejected' | 'cancelled';
 
 const labelMap: Record<Status, string> = {
   pending: 'Pending',
+  pending_em_review: 'EM Review',
   approved: 'Approved',
   rejected: 'Rejected',
   cancelled: 'Cancelled',

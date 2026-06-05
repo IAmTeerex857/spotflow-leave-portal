@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
@@ -13,7 +14,6 @@ export async function GET(request: Request) {
 
   const cookieStore = await cookies();
 
-  // Collect cookies Supabase wants to set — we'll attach them to the redirect response
   const cookiesToForward: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
 
   const supabase = createServerClient(
@@ -29,14 +29,33 @@ export async function GET(request: Request) {
     }
   );
 
-  const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code);
+  const { data: { user, session }, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error || !user) {
     console.error('OAuth callback error:', error?.message);
     return NextResponse.redirect(new URL('/login?error=auth_failed', origin));
   }
 
-  // Check if this is a new user who hasn't picked their team
+  // Persist the Google refresh token for Calendar sync (fire-and-forget)
+  // Only present when Google returns it (first login, or after re-consent with prompt=consent)
+  if (session?.provider_refresh_token) {
+    try {
+      const supabaseAdmin = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+      await supabaseAdmin.from('user_tokens').upsert({
+        user_id: user.id,
+        provider: 'google',
+        refresh_token: session.provider_refresh_token,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,provider' });
+    } catch (tokenErr) {
+      // Non-fatal — calendar sync degrades gracefully if token is missing
+      console.warn('Failed to store Google refresh token:', tokenErr);
+    }
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('team')
@@ -45,7 +64,6 @@ export async function GET(request: Request) {
 
   const redirectTo = profile?.team === 'pending' ? '/onboarding' : '/dashboard';
 
-  // Create the redirect and attach auth cookies so the browser has the session
   const response = NextResponse.redirect(new URL(redirectTo, origin));
   cookiesToForward.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);

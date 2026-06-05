@@ -322,6 +322,48 @@ export function headOfProductObserverEmail(
   };
 }
 
+/** Sent to the engineering manager when a line manager approves — asks them to vet */
+export function emVettingEmail(
+  details: LeaveDetails,
+  emName: string,
+  lineManagerName: string
+): { subject: string; html: string } {
+  const { requesterName, leaveType, startDate, endDate, durationDays, reason } = details;
+  const formattedStart = format(new Date(startDate), 'dd MMM yyyy');
+  const formattedEnd = format(new Date(endDate), 'dd MMM yyyy');
+
+  const content = `
+    ${statusChip('Awaiting Your Review', '#A78BFA', 'rgba(139,92,246,0.12)', 'rgba(139,92,246,0.25)')}
+
+    <h1 style="font-family:${FONT_STACK};font-size:26px;font-weight:800;color:#F4F4F5;margin:18px 0 10px;letter-spacing:-0.03em;line-height:1.15;">Leave approved by line manager — please vet</h1>
+    <p style="font-family:${FONT_STACK};font-size:14px;color:#A1A1AA;margin:0 0 28px;line-height:1.7;">
+      Hi ${emName} — <strong style="color:#E4E4E7;font-weight:600;">${lineManagerName}</strong> has approved a leave request from <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong>. Please review and confirm or override the decision.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
+      ${detailRow('Employee', requesterName)}
+      ${detailRow('Approved by', lineManagerName)}
+      ${detailRow('Leave type', leaveTypeLabel[leaveType] ?? leaveType)}
+      ${detailRow('From', formattedStart)}
+      ${detailRow('To', formattedEnd)}
+      ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`, !reason)}
+    </table>
+
+    ${reason ? quoteBlock('Reason', reason) : ''}
+
+    ${divider()}
+
+    ${ctaButton('Review & Confirm →', 'https://spotflow-leave-portal.vercel.app/manager/queue')}
+
+    <p style="font-family:${FONT_STACK};font-size:12px;color:#52525B;margin:16px 0 0;text-align:center;">Confirming will notify the employee and create their calendar event. Overriding will reject the request.</p>
+  `;
+
+  return {
+    subject: `[Review needed] ${requesterName}'s leave approved by ${lineManagerName}`,
+    html: wrapper(`${lineManagerName} approved ${requesterName}'s leave — your confirmation is needed.`, content),
+  };
+}
+
 /** Sent to the person covering the leaver's work */
 export function coverPersonEmail(
   details: LeaveDetails & { coverNotes?: string },

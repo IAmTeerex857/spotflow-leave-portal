@@ -129,6 +129,26 @@ body {
   background: rgba(34,197,94,0.2);
 }
 
+.btn-warning {
+  background: rgba(245,158,11,0.12);
+  color: #F59E0B;
+  border: 1px solid rgba(245,158,11,0.2);
+  padding: 8px 16px;
+}
+.btn-warning:hover {
+  background: rgba(245,158,11,0.2);
+}
+
+.btn-info {
+  background: rgba(139,92,246,0.12);
+  color: #A78BFA;
+  border: 1px solid rgba(139,92,246,0.2);
+  padding: 8px 16px;
+}
+.btn-info:hover {
+  background: rgba(139,92,246,0.2);
+}
+
 .btn-lg {
   padding: 13px 28px;
   font-size: 15px;
@@ -227,6 +247,11 @@ textarea.form-input {
   background: rgba(113, 113, 122, 0.12);
   color: #71717A;
   border: 1px solid rgba(113,113,122,0.2);
+}
+.badge-pending_em_review {
+  background: rgba(139, 92, 246, 0.12);
+  color: #A78BFA;
+  border: 1px solid rgba(139,92,246,0.2);
 }
 
 /* Sidebar */
