@@ -26,10 +26,11 @@ export default function LoginForm() {
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: 'https://www.googleapis.com/auth/calendar.events',
         queryParams: {
-          // Hint Google to only show work accounts
-          // hd restricts to a specific hosted domain
           hd: 'spotflow.one',
+          access_type: 'offline',
+          prompt: 'consent',
         },
       },
     });
