@@ -232,9 +232,47 @@ export default function ManagerQueuePage() {
         .order('created_at', { ascending: false });
 
       if (data) {
-        setRequests(data as unknown as Request[]);
+        let filtered = (data as unknown as Request[])
+          // Never let a manager action their own request
+          .filter(r => r.requester_id !== user.id);
+
+        // Scope each role to only the requests they are responsible for
+        if (role === 'frontend_line_manager') {
+          filtered = filtered.filter(r =>
+            r.requester.role === 'frontend_engineer' ||
+            (r.requester.role === 'engineer' && r.requester.team === 'frontend')
+          );
+        } else if (role === 'backend_line_manager') {
+          filtered = filtered.filter(r =>
+            r.requester.role === 'backend_engineer' ||
+            (r.requester.role === 'engineer' && r.requester.team === 'backend')
+          );
+        } else if (role === 'line_manager') {
+          filtered = filtered.filter(r =>
+            ['frontend_engineer', 'backend_engineer', 'engineer'].includes(r.requester.role)
+          );
+        } else if (role === 'engineering_manager') {
+          // Directly approves: qa_engineer and line managers (pending)
+          // Vets after LM approval: pending_em_review
+          filtered = filtered.filter(r =>
+            r.status === 'pending_em_review' ||
+            (r.status === 'pending' && [
+              'qa_engineer', 'frontend_line_manager', 'backend_line_manager', 'line_manager',
+            ].includes(r.requester.role))
+          );
+        } else if (role === 'head_of_product') {
+          filtered = filtered.filter(r =>
+            ['product_designer', 'product_manager', 'engineering_manager'].includes(r.requester.role)
+          );
+        } else if (role === 'head_of_operations') {
+          filtered = filtered.filter(r =>
+            ['operations', 'marketing'].includes(r.requester.role)
+          );
+        }
+
+        setRequests(filtered);
         const year = new Date().getFullYear();
-        const uniqueIds = [...new Set(data.map(r => (r as unknown as { requester_id: string }).requester_id))];
+        const uniqueIds = [...new Set(filtered.map(r => r.requester_id))];
         const { data: approved } = await supabase
           .from('leave_requests')
           .select('requester_id, duration_days')
