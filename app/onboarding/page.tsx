@@ -10,6 +10,7 @@ const TEAMS = [
   { value: 'frontend', label: 'Frontend Engineering' },
   { value: 'product', label: 'Product' },
   { value: 'design', label: 'Design' },
+  { value: 'operations', label: 'Operations' },
 ];
 
 export default function OnboardingPage() {
