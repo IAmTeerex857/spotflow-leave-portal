@@ -59,7 +59,7 @@ function wrapper(preheader: string, content: string): string {
             <td style="padding-top:28px;text-align:center;">
               <p style="font-family:${FONT_STACK};font-size:11px;color:#3F3F46;margin:0;line-height:1.7;">
                 Spotflow Leave Portal &nbsp;&middot;&nbsp;
-                <a href="https://spotflow-leave-portal.vercel.app" style="color:#52525B;text-decoration:none;">spotflow-leave-portal.vercel.app</a>
+                <a href="https://leave-app.spotflow.co" style="color:#52525B;text-decoration:none;">leave-app.spotflow.co</a>
               </p>
             </td>
           </tr>
@@ -163,7 +163,7 @@ export function submittedEmail(details: LeaveDetails, approverName: string): { s
 
     ${divider()}
 
-    ${ctaButton('Review Request →', 'https://spotflow-leave-portal.vercel.app/manager/queue')}
+    ${ctaButton('Review Request →', 'https://leave-app.spotflow.co/manager/queue')}
   `;
 
   return {
@@ -195,7 +195,7 @@ export function approvedEmail(details: LeaveDetails): { subject: string; html: s
 
     ${divider()}
 
-    ${ctaButton('View on Dashboard →', 'https://spotflow-leave-portal.vercel.app/dashboard')}
+    ${ctaButton('View on Dashboard →', 'https://leave-app.spotflow.co/dashboard')}
   `;
 
   return {
@@ -229,7 +229,7 @@ export function rejectedEmail(details: LeaveDetails): { subject: string; html: s
 
     ${divider()}
 
-    ${ctaButton('Submit a New Request →', 'https://spotflow-leave-portal.vercel.app/requests/new')}
+    ${ctaButton('Submit a New Request →', 'https://leave-app.spotflow.co/requests/new')}
   `;
 
   return {
@@ -273,7 +273,7 @@ export function lineManagerActionEmail(
 
     ${divider()}
 
-    ${ctaButton('View Manager Queue →', 'https://spotflow-leave-portal.vercel.app/manager/queue')}
+    ${ctaButton('View Manager Queue →', 'https://leave-app.spotflow.co/manager/queue')}
   `;
 
   return {
@@ -353,7 +353,7 @@ export function emVettingEmail(
 
     ${divider()}
 
-    ${ctaButton('Review & Confirm →', 'https://spotflow-leave-portal.vercel.app/manager/queue')}
+    ${ctaButton('Review & Confirm →', 'https://leave-app.spotflow.co/manager/queue')}
 
     <p style="font-family:${FONT_STACK};font-size:12px;color:#52525B;margin:16px 0 0;text-align:center;">Confirming will notify the employee and create their calendar event. Overriding will reject the request.</p>
   `;
