@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { getSiteUrl } from '@/lib/site-url';
 
 function GoogleIcon() {
   return (
@@ -25,7 +26,7 @@ export default function LoginForm() {
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${getSiteUrl(window.location.origin)}/auth/callback`,
         scopes: 'https://www.googleapis.com/auth/calendar.events',
         queryParams: {
           hd: 'spotflow.one',

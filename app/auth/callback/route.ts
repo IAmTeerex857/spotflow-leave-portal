@@ -1,12 +1,13 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { getSiteUrl } from '@/lib/site-url';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const origin = requestUrl.origin;
+  const origin = getSiteUrl(requestUrl.origin);
 
   if (!code) {
     return NextResponse.redirect(new URL('/login', origin));
@@ -14,7 +15,21 @@ export async function GET(request: Request) {
 
   const cookieStore = await cookies();
 
-  const cookiesToForward: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
+  const cookiesToForward: Array<{ name: string; value: string; options: CookieOptions }> = [];
+  const headersToForward: Record<string, string> = {};
+
+  const redirect = (pathname: string) => {
+    const response = NextResponse.redirect(new URL(pathname, origin));
+
+    cookiesToForward.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+    });
+    Object.entries(headersToForward).forEach(([name, value]) => {
+      response.headers.set(name, value);
+    });
+
+    return response;
+  };
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,8 +37,9 @@ export async function GET(request: Request) {
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(c => cookiesToForward.push(c));
+        setAll(cookiesToSet, headers) {
+          cookiesToForward.push(...cookiesToSet);
+          Object.assign(headersToForward, headers);
         },
       },
     }
@@ -33,7 +49,7 @@ export async function GET(request: Request) {
 
   if (error || !user) {
     console.error('OAuth callback error:', error?.message);
-    return NextResponse.redirect(new URL('/login?error=auth_failed', origin));
+    return redirect('/login?error=auth_failed');
   }
 
   // Persist the Google refresh token for Calendar sync (fire-and-forget)
@@ -64,10 +80,5 @@ export async function GET(request: Request) {
 
   const redirectTo = profile?.team === 'pending' ? '/onboarding' : '/dashboard';
 
-  const response = NextResponse.redirect(new URL(redirectTo, origin));
-  cookiesToForward.forEach(({ name, value, options }) => {
-    response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
-  });
-
-  return response;
+  return redirect(redirectTo);
 }

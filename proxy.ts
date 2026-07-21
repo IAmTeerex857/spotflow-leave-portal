@@ -1,4 +1,5 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { getSiteUrl } from '@/lib/site-url';
 import { NextResponse, type NextRequest } from 'next/server';
 
 const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/auth/callback', '/onboarding'];
@@ -34,6 +35,23 @@ function isManager(role: Role) {
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+  const cookiesToForward: Array<{ name: string; value: string; options: CookieOptions }> = [];
+  const headersToForward: Record<string, string> = {};
+
+  const redirect = (pathname: string) => {
+    const response = NextResponse.redirect(
+      new URL(pathname, getSiteUrl(request.nextUrl.origin))
+    );
+
+    cookiesToForward.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+    });
+    Object.entries(headersToForward).forEach(([name, value]) => {
+      response.headers.set(name, value);
+    });
+
+    return response;
+  };
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,12 +59,17 @@ export async function proxy(request: NextRequest) {
     {
       cookies: {
         getAll() { return request.cookies.getAll(); },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet, headers) {
+          cookiesToForward.push(...cookiesToSet);
+          Object.assign(headersToForward, headers);
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
+          Object.entries(headers).forEach(([name, value]) => {
+            supabaseResponse.headers.set(name, value);
+          });
         },
       },
     }
@@ -58,12 +81,12 @@ export async function proxy(request: NextRequest) {
 
   // Not logged in — redirect to login
   if (!user && !isPublic) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return redirect('/login');
   }
 
   // Logged in — redirect away from auth pages and landing
   if (user && ['/', '/login', '/signup'].includes(pathname)) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return redirect('/dashboard');
   }
 
   if (user) {
@@ -75,20 +98,20 @@ export async function proxy(request: NextRequest) {
 
     // New Google user who hasn't picked a team yet
     if (profile?.team === 'pending' && pathname !== '/onboarding') {
-      return NextResponse.redirect(new URL('/onboarding', request.url));
+      return redirect('/onboarding');
     }
 
     // Protect /admin — only is_admin = true
     if (ADMIN_ROUTES.some(r => pathname.startsWith(r))) {
       if (!profile?.is_admin) {
-        return NextResponse.redirect(new URL('/403', request.url));
+        return redirect('/403');
       }
     }
 
     // Protect /manager — only manager roles
     if (MANAGER_ROUTES.some(r => pathname.startsWith(r))) {
       if (!profile || !isManager(profile.role as Role)) {
-        return NextResponse.redirect(new URL('/403', request.url));
+        return redirect('/403');
       }
     }
   }

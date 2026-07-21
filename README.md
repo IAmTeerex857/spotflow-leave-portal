@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Spotflow Leave Portal
 
-## Getting Started
+## Local Development
 
-First, run the development server:
+Copy `.env.example` to `.env.local`, fill in the credentials, then run:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Production Authentication
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Set this environment variable in the Vercel Production environment:
 
-## Learn More
+```text
+NEXT_PUBLIC_SITE_URL=https://leave-app.spotflow.co
+```
 
-To learn more about Next.js, take a look at the following resources:
+In Supabase, open **Authentication > URL Configuration** and configure:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Site URL: `https://leave-app.spotflow.co`
+- Redirect URL: `https://leave-app.spotflow.co/auth/callback`
+- Local redirect URL: `http://localhost:3000/auth/callback`
+- Vercel redirect URL, if the Vercel domain is used directly: `https://spotflow-leave-portal.vercel.app/auth/callback`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Use exact production URLs rather than a wildcard. Supabase falls back to its Site URL when an OAuth callback is missing from the redirect allowlist.
 
-## Deploy on Vercel
+In Google Cloud, the authorized redirect URI is Supabase's provider callback, not this application's callback:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```text
+https://<supabase-project-ref>.supabase.co/auth/v1/callback
+```
