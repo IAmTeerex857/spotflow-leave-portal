@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { syncApprovedLeaveEvents } from '@/lib/google-calendar';
 import { getSiteUrl } from '@/lib/site-url';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
     return redirect('/login?error=auth_failed');
   }
 
-  // Persist the Google refresh token for Calendar sync (fire-and-forget)
+  // Persist the Google refresh token for Calendar sync.
   // Only present when Google returns it (first login, or after re-consent with prompt=consent)
   if (session?.provider_refresh_token) {
     try {
@@ -60,16 +61,24 @@ export async function GET(request: Request) {
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       );
-      await supabaseAdmin.from('user_tokens').upsert({
+      const { error: tokenError } = await supabaseAdmin.from('user_tokens').upsert({
         user_id: user.id,
         provider: 'google',
         refresh_token: session.provider_refresh_token,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,provider' });
+      if (tokenError) throw tokenError;
     } catch (tokenErr) {
       // Non-fatal — calendar sync degrades gracefully if token is missing
       console.warn('Failed to store Google refresh token:', tokenErr);
     }
+  }
+
+  try {
+    await syncApprovedLeaveEvents(user.id);
+  } catch (calendarErr) {
+    // Calendar failures must not prevent the user from signing in.
+    console.warn('Failed to sync approved leave events:', calendarErr);
   }
 
   const { data: profile } = await supabase

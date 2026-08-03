@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
-import { format } from 'date-fns';
-import { google } from 'googleapis';
+import { createCalendarEvent } from '@/lib/google-calendar';
 import {
   submittedEmail,
   approvedEmail,
@@ -54,53 +53,6 @@ async function getProfilesByRole(role: string): Promise<{ full_name: string; ema
     .eq('role', role)
     .limit(10);
   return data ?? [];
-}
-
-/** Create a Google Calendar event on the requester's primary calendar */
-async function createCalendarEvent(userId: string, details: {
-  leaveType: string;
-  startDate: string;
-  endDate: string;
-  reason: string;
-}) {
-  const { data: tokenRow } = await supabaseAdmin
-    .from('user_tokens')
-    .select('refresh_token')
-    .eq('user_id', userId)
-    .eq('provider', 'google')
-    .single();
-
-  if (!tokenRow?.refresh_token) return; // no token stored yet — skip silently
-
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
-  );
-  oauth2Client.setCredentials({ refresh_token: tokenRow.refresh_token });
-
-  const leaveTypeLabels: Record<string, string> = {
-    annual: 'Annual Leave',
-    sick: 'Sick Leave',
-    personal: 'Personal Leave',
-    other: 'Leave',
-  };
-
-  // Google Calendar all-day events use an exclusive end date
-  const endExclusive = new Date(details.endDate);
-  endExclusive.setDate(endExclusive.getDate() + 1);
-  const endDateStr = format(endExclusive, 'yyyy-MM-dd');
-
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-  await calendar.events.insert({
-    calendarId: 'primary',
-    requestBody: {
-      summary: leaveTypeLabels[details.leaveType] ?? 'Leave',
-      start: { date: details.startDate },
-      end: { date: endDateStr },
-      description: `Approved via Spotflow Leave Portal.\n\nReason: ${details.reason}`,
-      status: 'confirmed',
-    },
-  });
 }
 
 export async function POST(req: NextRequest) {
@@ -236,15 +188,16 @@ export async function POST(req: NextRequest) {
         })
       );
 
-      // Google Calendar event — fire-and-forget, non-blocking
-      createCalendarEvent(requester.id, {
+      // Await this work so serverless runtimes do not stop before Google receives it.
+      const calendar = await createCalendarEvent(requester.id, {
+        requestId: leave.id,
         leaveType: leave.leave_type,
         startDate: leave.start_date,
         endDate: leave.end_date,
         reason: leave.reason ?? '',
-      }).catch(err => console.warn('Calendar event creation failed:', err));
+      });
 
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, calendar });
     }
 
     // ------------------------------------------------------------------
