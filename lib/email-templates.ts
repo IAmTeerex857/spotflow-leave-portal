@@ -1,6 +1,9 @@
 import { format } from 'date-fns';
+import { getSiteUrl } from '@/lib/site-url';
 
 const FONT_STACK = `'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+const SITE_URL = getSiteUrl('https://spotflow-leave-portal.vercel.app');
+const SITE_HOST = SITE_URL.replace(/^https?:\/\//, '');
 
 const LOGO_SVG = `<svg width="20" height="20" viewBox="0 0 26 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14.1074 0.0237318C7.36969-0.407113 1.09754 5.08006 0.113168 12.2771C-0.871208 19.4741 4.35923 24.6984 11.7632 23.9288C19.1672 23.1593 25.453 17.6531 25.7588 11.6511C26.0646 5.6491 20.8506 0.445092 14.1074 0.0237318Z" fill="#F4F4F5"/></svg>`;
 
@@ -59,7 +62,7 @@ function wrapper(preheader: string, content: string): string {
             <td style="padding-top:28px;text-align:center;">
               <p style="font-family:${FONT_STACK};font-size:11px;color:#3F3F46;margin:0;line-height:1.7;">
                 Spotflow Leave Portal &nbsp;&middot;&nbsp;
-                <a href="https://leave-app.spotflow.co" style="color:#52525B;text-decoration:none;">leave-app.spotflow.co</a>
+                <a href="${SITE_URL}" style="color:#52525B;text-decoration:none;">${SITE_HOST}</a>
               </p>
             </td>
           </tr>
@@ -163,7 +166,7 @@ export function submittedEmail(details: LeaveDetails, approverName: string): { s
 
     ${divider()}
 
-    ${ctaButton('Review Request →', 'https://leave-app.spotflow.co/manager/queue')}
+    ${ctaButton('Review Request →', `${SITE_URL}/manager/queue`)}
   `;
 
   return {
@@ -195,7 +198,7 @@ export function approvedEmail(details: LeaveDetails): { subject: string; html: s
 
     ${divider()}
 
-    ${ctaButton('View on Dashboard →', 'https://leave-app.spotflow.co/dashboard')}
+    ${ctaButton('View on Dashboard →', `${SITE_URL}/dashboard`)}
   `;
 
   return {
@@ -229,7 +232,7 @@ export function rejectedEmail(details: LeaveDetails): { subject: string; html: s
 
     ${divider()}
 
-    ${ctaButton('Submit a New Request →', 'https://leave-app.spotflow.co/requests/new')}
+    ${ctaButton('Submit a New Request →', `${SITE_URL}/requests/new`)}
   `;
 
   return {
@@ -273,7 +276,7 @@ export function lineManagerActionEmail(
 
     ${divider()}
 
-    ${ctaButton('View Manager Queue →', 'https://leave-app.spotflow.co/manager/queue')}
+    ${ctaButton('View Manager Queue →', `${SITE_URL}/manager/queue`)}
   `;
 
   return {
@@ -353,7 +356,7 @@ export function emVettingEmail(
 
     ${divider()}
 
-    ${ctaButton('Review & Confirm →', 'https://leave-app.spotflow.co/manager/queue')}
+    ${ctaButton('Review & Confirm →', `${SITE_URL}/manager/queue`)}
 
     <p style="font-family:${FONT_STACK};font-size:12px;color:#52525B;margin:16px 0 0;text-align:center;">Confirming will notify the employee and create their calendar event. Overriding will reject the request.</p>
   `;
