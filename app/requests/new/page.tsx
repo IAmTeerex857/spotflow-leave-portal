@@ -4,15 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarDays, FileText, AlignLeft, Users, AlertTriangle, Info } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { countWorkingDays, PUBLIC_HOLIDAYS } from '@/lib/public-holidays';
-import { getLeaveBalance } from '@/lib/leave-balance';
-
-const LEAVE_TYPES = [
-  { value: 'annual', label: 'Annual Leave' },
-  { value: 'sick', label: 'Sick Leave' },
-  { value: 'personal', label: 'Personal' },
-  { value: 'other', label: 'Other' },
-];
+import { countWorkingDays, holidaysBetween, useHolidays } from '@/lib/public-holidays';
+import { getLeaveBalance, type LeaveBalance } from '@/lib/leave-balance';
+import { LEAVE_TYPES, errorMessage } from '@/lib/leave';
 
 export default function NewRequestPage() {
   const router = useRouter();
@@ -20,7 +14,8 @@ export default function NewRequestPage() {
   const [endDate, setEndDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [balance, setBalance] = useState<{ used: number; remaining: number; allowance: number; adjustment: number } | null>(null);
+  const [balance, setBalance] = useState<LeaveBalance | null>(null);
+  const holidays = useHolidays();
   const [showLimitModal, setShowLimitModal] = useState(false);
 
   useEffect(() => {
@@ -28,22 +23,16 @@ export default function NewRequestPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const b = await getLeaveBalance(user.id);
-      setBalance(b);
+      setBalance(await getLeaveBalance(user.id).catch(() => null));
     };
     init();
   }, []);
 
-  const workingDays = startDate && endDate
-    ? countWorkingDays(new Date(startDate), new Date(endDate))
-    : 0;
+  const workingDays = countWorkingDays(startDate, endDate, holidays);
+  const holidaysInRange = holidaysBetween(startDate, endDate, holidays);
 
-  // Public holidays in selected range (for info display)
-  const holidaysInRange = startDate && endDate
-    ? PUBLIC_HOLIDAYS.filter(h => h.date >= startDate && h.date <= endDate)
-    : [];
-
-  const remaining = balance?.remaining ?? 20;
+  // Days already waiting for approval are held against the allowance too.
+  const remaining = balance ? Math.max(0, balance.remaining - balance.pending) : 20;
   const wouldExceed = workingDays > 0 && workingDays > remaining;
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
@@ -67,40 +56,32 @@ export default function NewRequestPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setError('Not authenticated'); setSubmitting(false); return; }
 
-    const { error: insertError } = await supabase.from('leave_requests').insert({
-      requester_id: user.id,
-      leave_type: leaveType,
-      start_date: startDate,
-      end_date: endDate,
-      duration_days: workingDays,
-      reason,
-      cover_notes: coverNotes || null,
-      cover_person_email: coverPersonEmail || null,
-      status: 'pending',
-    });
+    // The database sets status and duration, and enforces the allowance.
+    const { data: newRequest, error: insertError } = await supabase
+      .from('leave_requests')
+      .insert({
+        requester_id: user.id,
+        leave_type: leaveType,
+        start_date: startDate,
+        end_date: endDate,
+        reason,
+        cover_notes: coverNotes || null,
+        cover_person_email: coverPersonEmail || null,
+      })
+      .select('id')
+      .single();
 
-    if (insertError) {
-      setError(insertError.message);
+    if (insertError || !newRequest) {
+      setError(errorMessage(insertError));
       setSubmitting(false);
       return;
     }
 
-    // Fire email notification (non-blocking)
-    const { data: newRequest } = await supabase
-      .from('leave_requests')
-      .select('id')
-      .eq('requester_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (newRequest?.id) {
-      fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: 'submitted', requestId: newRequest.id }),
-      }).catch(console.error);
-    }
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'submitted', requestId: newRequest.id }),
+    }).catch(console.error);
 
     router.push('/dashboard');
   };
@@ -116,7 +97,7 @@ export default function NewRequestPage() {
             </div>
             <h3 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>Leave limit exceeded</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '20px' }}>
-              You only have <strong style={{ color: 'var(--text-primary)' }}>{remaining} day{remaining !== 1 ? 's' : ''}</strong> remaining this year,
+              You only have <strong style={{ color: 'var(--text-primary)' }}>{remaining} day{remaining !== 1 ? 's' : ''}</strong> available this year (after pending requests),
               but this request is for <strong style={{ color: '#EF4444' }}>{workingDays} day{workingDays !== 1 ? 's' : ''}</strong>.
               <br /><br />
               Please adjust your dates to fit within your remaining allowance.
@@ -247,6 +228,8 @@ export default function NewRequestPage() {
                   type="email"
                   className="form-input"
                   placeholder="colleague@spotflow.one"
+                  pattern="[^@\s]+@spotflow\.one"
+                  title="Use a colleague's @spotflow.one address"
                 />
                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px' }}>
                   They'll receive an email letting them know they're covering your work during this period.

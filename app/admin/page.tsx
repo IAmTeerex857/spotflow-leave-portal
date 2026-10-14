@@ -3,23 +3,9 @@ import AppShell from '@/components/layout/AppShell';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Shield, Save, CheckCircle, Pencil, X } from 'lucide-react';
-import { getAllLeaveBalances } from '@/lib/leave-balance';
-
-type Role =
-  | 'engineer'
-  | 'frontend_engineer'
-  | 'backend_engineer'
-  | 'qa_engineer'
-  | 'operations'
-  | 'marketing'
-  | 'product_designer'
-  | 'product_manager'
-  | 'frontend_line_manager'
-  | 'backend_line_manager'
-  | 'engineering_manager'
-  | 'head_of_product'
-  | 'head_of_operations'
-  | 'line_manager';
+import { getLeaveBalances } from '@/lib/leave-balance';
+import { ROLES, roleLabel, teamLabel, type Role } from '@/lib/roles';
+import { errorMessage } from '@/lib/leave';
 
 interface Profile {
   id: string;
@@ -42,25 +28,6 @@ interface BalanceRow {
   adjustment: number;
 }
 
-const ROLES: { value: Role; label: string }[] = [
-  { value: 'frontend_engineer', label: 'Frontend Engineer' },
-  { value: 'backend_engineer', label: 'Backend Engineer' },
-  { value: 'qa_engineer', label: 'QA Engineer' },
-  { value: 'operations', label: 'Operations' },
-  { value: 'marketing', label: 'Marketing' },
-  { value: 'product_designer', label: 'Product Designer' },
-  { value: 'product_manager', label: 'Product Manager' },
-  { value: 'frontend_line_manager', label: 'Frontend Line Manager' },
-  { value: 'backend_line_manager', label: 'Backend Line Manager' },
-  { value: 'engineering_manager', label: 'Engineering Manager' },
-  { value: 'head_of_product', label: 'Head of Product' },
-  { value: 'head_of_operations', label: 'Head of Operations' },
-  { value: 'engineer', label: 'Engineer (default)' },
-];
-
-const teamLabel = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '—');
-const roleLabel = (r: string) => ROLES.find(x => x.value === r)?.label ?? r;
-
 type Tab = 'roles' | 'balances';
 
 export default function AdminPage() {
@@ -80,6 +47,7 @@ export default function AdminPage() {
   const [adjustmentSaving, setAdjustmentSaving] = useState<string | null>(null);
   const [adjustmentSaved, setAdjustmentSaved] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => { loadProfiles(); }, []);
   useEffect(() => {
@@ -103,8 +71,7 @@ export default function AdminPage() {
 
   const loadBalances = async () => {
     setBalancesLoading(true);
-    const data = await getAllLeaveBalances();
-    const rows = data as BalanceRow[];
+    const rows: BalanceRow[] = (await getLeaveBalances().catch(() => [])).map(b => ({ ...b, id: b.user_id }));
     setBalances(rows);
     const initial: Record<string, number> = {};
     rows.forEach(r => { initial[r.id] = r.adjustment ?? 0; });
@@ -118,8 +85,13 @@ export default function AdminPage() {
 
   const handleSave = async (profile: Profile) => {
     setSaving(profile.id);
-    const supabase = createClient();
-    await supabase.from('profiles').update({ role: pendingRoles[profile.id] }).eq('id', profile.id);
+    setSaveError('');
+    const { error } = await createClient().from('profiles').update({ role: pendingRoles[profile.id] }).eq('id', profile.id);
+    if (error) {
+      setSaveError(`${profile.full_name}: ${errorMessage(error)}`);
+      setSaving(null);
+      return;
+    }
     setProfiles(prev => prev.map(p => p.id === profile.id ? { ...p, role: pendingRoles[profile.id] } : p));
     setSaving(null);
     setSaved(profile.id);
@@ -128,13 +100,18 @@ export default function AdminPage() {
 
   const handleAdjustmentSave = async (row: BalanceRow) => {
     setAdjustmentSaving(row.id);
-    const supabase = createClient();
+    setSaveError('');
     const newAdj = pendingAdjustments[row.id] ?? 0;
-    await supabase.from('profiles').update({ leave_balance_adjustment: newAdj }).eq('id', row.id);
+    const { error } = await createClient().from('profiles').update({ leave_balance_adjustment: newAdj }).eq('id', row.id);
+    if (error) {
+      setSaveError(`${row.full_name}: ${errorMessage(error)}`);
+      setAdjustmentSaving(null);
+      return;
+    }
     // Update local balances to reflect new adjustment
     setBalances(prev => prev.map(b => {
       if (b.id !== row.id) return b;
-      const effectiveAllowance = 20 + newAdj;
+      const effectiveAllowance = b.allowance - b.adjustment + newAdj;
       return {
         ...b,
         adjustment: newAdj,
@@ -180,6 +157,12 @@ export default function AdminPage() {
       </header>
 
       <div className="page-content fade-in">
+
+        {saveError && (
+          <div role="alert" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#EF4444' }}>
+            Couldn’t save — {saveError}
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '3px', width: 'fit-content' }}>
@@ -323,7 +306,7 @@ export default function AdminPage() {
                       />
                     </div>
                     <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px', textAlign: 'center' }}>
-                      Total allowance: <strong style={{ color: 'var(--text-secondary)' }}>{20 + currentAdj} days</strong>
+                      Total allowance: <strong style={{ color: 'var(--text-secondary)' }}>{editRow.allowance - editRow.adjustment + currentAdj} days</strong>
                       {currentAdj !== 0 && (
                         <span style={{ color: currentAdj > 0 ? '#22C55E' : '#EF4444', marginLeft: '6px' }}>
                           ({currentAdj > 0 ? '+' : ''}{currentAdj}d adj.)

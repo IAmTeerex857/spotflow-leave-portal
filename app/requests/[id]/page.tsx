@@ -3,13 +3,10 @@ import AppShell from '@/components/layout/AppShell';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { CalendarDays, User, Clock, CheckCircle, XCircle, FileText, AlignLeft, MapPin, Thermometer, Users, ChevronLeft, AlertTriangle } from 'lucide-react';
+import { CalendarDays, User, Clock, CheckCircle, XCircle, FileText, AlignLeft, MapPin, Thermometer, Users, ChevronLeft, AlertTriangle, ShieldCheck, Ban } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useParams, useRouter } from 'next/navigation';
-
-const leaveTypeLabel: Record<string, string> = {
-  annual: 'Annual Leave', sick: 'Sick Leave', personal: 'Personal', other: 'Other',
-};
+import { formatDate, leaveTypeLabel, type LeaveStatus } from '@/lib/leave';
 const leaveTypeIcon: Record<string, React.ReactNode> = {
   annual: <MapPin size={18} strokeWidth={1.5} />,
   sick: <Thermometer size={18} strokeWidth={1.5} />,
@@ -25,12 +22,65 @@ interface RequestDetail {
   duration_days: number;
   reason: string;
   cover_notes: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  status: LeaveStatus;
   created_at: string;
   actioned_at: string | null;
+  line_manager_actioned_at: string | null;
+  cancelled_at: string | null;
   approver_comment: string | null;
   requester: { full_name: string; team: string; role: string };
   approver: { full_name: string } | null;
+  line_manager: { full_name: string } | null;
+}
+
+interface TimelineItem {
+  icon: React.ReactNode;
+  label: string;
+  time: string;
+  color: string;
+  comment?: string | null;
+}
+
+const stamp = (ts: string) => format(new Date(ts), 'dd MMM yyyy, HH:mm');
+
+/** Every stage the request has been through, plus what it's waiting on. */
+function buildTimeline(r: RequestDetail): TimelineItem[] {
+  const items: TimelineItem[] = [
+    { icon: <FileText size={13} />, label: 'Submitted', time: stamp(r.created_at), color: '#6366F1' },
+  ];
+
+  if (r.line_manager_actioned_at) {
+    items.push({
+      icon: <CheckCircle size={13} />,
+      label: `Approved by ${r.line_manager?.full_name ?? 'line manager'}`,
+      time: stamp(r.line_manager_actioned_at),
+      color: '#A78BFA',
+      comment: r.status === 'pending_em_review' ? r.approver_comment : null,
+    });
+  }
+
+  const by = r.approver ? ` by ${r.approver.full_name}` : '';
+  const decided = r.actioned_at && r.status !== 'pending_em_review';
+
+  if (r.status === 'pending') {
+    items.push({ icon: <Clock size={13} />, label: 'Awaiting approval', time: 'Pending manager review', color: '#F59E0B' });
+  } else if (r.status === 'pending_em_review') {
+    items.push({ icon: <ShieldCheck size={13} />, label: 'Awaiting Engineering Manager', time: 'Pending confirmation', color: '#A78BFA' });
+  } else if (r.status === 'approved' && decided) {
+    items.push({ icon: <CheckCircle size={13} />, label: `Approved${by}`, time: stamp(r.actioned_at!), color: '#22C55E', comment: r.approver_comment });
+  } else if (r.status === 'rejected' && decided) {
+    const override = r.line_manager_actioned_at ? 'Overridden' : 'Rejected';
+    items.push({ icon: <XCircle size={13} />, label: `${override}${by}`, time: stamp(r.actioned_at!), color: '#EF4444', comment: r.approver_comment });
+  }
+
+  if (r.status === 'cancelled') {
+    if (r.actioned_at && r.approver) {
+      items.push({ icon: <CheckCircle size={13} />, label: `Approved${by}`, time: stamp(r.actioned_at), color: '#22C55E' });
+    }
+    items.push({ icon: <Ban size={13} />, label: 'Cancelled', time: r.cancelled_at ? stamp(r.cancelled_at) : '', color: '#71717A' });
+  }
+
+  return items;
 }
 
 function DetailRow({ label, value, icon }: { label: string; value: React.ReactNode; icon: React.ReactNode }) {
@@ -60,7 +110,8 @@ export default function RequestDetailPage() {
         .select(`
           *,
           requester:profiles!leave_requests_requester_id_fkey(full_name, team, role),
-          approver:profiles!leave_requests_approver_id_fkey(full_name)
+          approver:profiles!leave_requests_approver_id_fkey(full_name),
+          line_manager:profiles!leave_requests_line_manager_id_fkey(full_name)
         `)
         .eq('id', id as string)
         .single();
@@ -123,16 +174,16 @@ export default function RequestDetailPage() {
                 {leaveTypeIcon[r.leave_type] ?? <FileText size={18} strokeWidth={1.5} />}
               </div>
               <div>
-                <p style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{leaveTypeLabel[r.leave_type]}</p>
+                <p style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{leaveTypeLabel(r.leave_type)}</p>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {format(new Date(r.start_date), 'dd MMM')} – {format(new Date(r.end_date), 'dd MMM yyyy')}
+                  {formatDate(r.start_date, 'dd MMM')} – {formatDate(r.end_date, 'dd MMM yyyy')}
                   &nbsp;·&nbsp;<strong style={{ color: 'var(--text-secondary)' }}>{r.duration_days} day{r.duration_days !== 1 ? 's' : ''}</strong>
                 </p>
               </div>
             </div>
 
             <DetailRow icon={<CalendarDays size={15} />} label="Dates"
-              value={`${format(new Date(r.start_date), 'EEEE, dd MMMM yyyy')} → ${format(new Date(r.end_date), 'EEEE, dd MMMM yyyy')}`} />
+              value={`${formatDate(r.start_date, 'EEEE, dd MMMM yyyy')} → ${formatDate(r.end_date, 'EEEE, dd MMMM yyyy')}`} />
             <DetailRow icon={<Clock size={15} />} label="Duration"
               value={`${r.duration_days} working day${r.duration_days !== 1 ? 's' : ''} (weekends & public holidays excluded)`} />
             <DetailRow icon={<User size={15} />} label="Requested by"
@@ -175,23 +226,7 @@ export default function RequestDetailPage() {
           <div className="glass-card" style={{ padding: '20px' }}>
             <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px' }}>Timeline</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-              {[
-                { icon: <FileText size={13} />, label: 'Submitted', time: format(new Date(r.created_at), 'dd MMM yyyy, HH:mm'), color: '#6366F1', active: true },
-                ...(r.actioned_at
-                  ? [{
-                    icon: isApproved ? <CheckCircle size={13} /> : <XCircle size={13} />,
-                    label: isApproved ? `Approved${r.approver ? ` by ${r.approver.full_name}` : ''}` : `Rejected${r.approver ? ` by ${r.approver.full_name}` : ''}`,
-                    time: format(new Date(r.actioned_at), 'dd MMM yyyy, HH:mm'),
-                    color: isApproved ? '#22C55E' : '#EF4444',
-                    active: true,
-                    comment: r.approver_comment,
-                  }]
-                  : [{
-                    icon: <Clock size={13} />, label: 'Awaiting approval', time: 'Pending manager review',
-                    color: '#F59E0B', active: true, comment: null,
-                  }]
-                ),
-              ].map((item, i, arr) => (
+              {buildTimeline(r).map((item, i, arr) => (
                 <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', paddingBottom: i < arr.length - 1 ? '16px' : '0', position: 'relative' }}>
                   {i < arr.length - 1 && <div style={{ position: 'absolute', left: '11px', top: '22px', bottom: '0', width: '1px', background: 'var(--border)' }} />}
                   <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: `${item.color}18`, border: `1px solid ${item.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.color, flexShrink: 0 }}>
@@ -199,7 +234,7 @@ export default function RequestDetailPage() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{item.label}</p>
-                    {'comment' in item && item.comment && (
+                    {item.comment && (
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '2px' }}>&ldquo;{item.comment}&rdquo;</p>
                     )}
                     <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{item.time}</p>

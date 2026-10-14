@@ -14,9 +14,9 @@ function GoogleIcon() {
   );
 }
 
-export default function LoginForm() {
+export default function LoginForm({ initialError = '' }: { initialError?: string }) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -29,6 +29,8 @@ export default function LoginForm() {
         redirectTo: `${getSiteUrl(window.location.origin)}/auth/callback`,
         scopes: 'https://www.googleapis.com/auth/calendar.events',
         queryParams: {
+          // Pre-selects the work account in Google's picker. The domain is
+          // enforced by the handle_new_user trigger, not by this hint.
           hd: 'spotflow.one',
           access_type: 'offline',
           prompt: 'consent',

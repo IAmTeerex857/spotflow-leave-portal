@@ -4,12 +4,13 @@ import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useEffect, useState, useRef } from 'react';
 import { format } from 'date-fns';
-import { PlusCircle, Clock, CheckCircle, XCircle, ArrowUpRight, MapPin, Thermometer, User, FileText, MoreHorizontal, Pencil, Trash2, CalendarDays, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Clock, CheckCircle, XCircle, ArrowUpRight, MapPin, Thermometer, User, FileText, MoreHorizontal, Pencil, Trash2, CalendarDays, AlertTriangle, Ban, ShieldCheck } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getLeaveBalance, type LeaveBalance } from '@/lib/leave-balance';
-import { countWorkingDays } from '@/lib/public-holidays';
+import { countWorkingDays, useHolidays } from '@/lib/public-holidays';
+import { LEAVE_TYPES, errorMessage, formatDate, leaveTypeLabel, todayStr, type LeaveStatus } from '@/lib/leave';
 
-type Status = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type Status = LeaveStatus;
 
 interface LeaveRequest {
   id: string;
@@ -22,20 +23,6 @@ interface LeaveRequest {
   created_at: string;
 }
 
-const leaveTypeLabel: Record<string, string> = {
-  annual: 'Annual Leave',
-  sick: 'Sick Leave',
-  personal: 'Personal',
-  other: 'Other',
-};
-
-const LEAVE_TYPES = [
-  { value: 'annual', label: 'Annual Leave' },
-  { value: 'sick', label: 'Sick Leave' },
-  { value: 'personal', label: 'Personal' },
-  { value: 'other', label: 'Other' },
-];
-
 const leaveTypeIcon: Record<string, React.ReactNode> = {
   annual: <MapPin size={20} strokeWidth={1.5} />,
   sick: <Thermometer size={20} strokeWidth={1.5} />,
@@ -46,6 +33,7 @@ const leaveTypeIcon: Record<string, React.ReactNode> = {
 const statusIcon: Record<Status, React.ReactNode> = {
   approved: <CheckCircle size={14} style={{ color: '#22C55E' }} />,
   pending: <Clock size={14} style={{ color: '#F59E0B' }} />,
+  pending_em_review: <ShieldCheck size={14} style={{ color: '#A78BFA' }} />,
   rejected: <XCircle size={14} style={{ color: '#EF4444' }} />,
   cancelled: <XCircle size={14} style={{ color: '#71717A' }} />,
 };
@@ -62,10 +50,9 @@ function EditModal({ request, onClose, onSave }: {
   const [reason, setReason] = useState(request.reason ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const holidays = useHolidays();
 
-  const workingDays = startDate && endDate
-    ? countWorkingDays(new Date(startDate), new Date(endDate))
-    : 0;
+  const workingDays = countWorkingDays(startDate, endDate, holidays);
 
   const handleSave = async () => {
     setSaving(true);
@@ -73,21 +60,11 @@ function EditModal({ request, onClose, onSave }: {
     const supabase = createClient();
     const { error: updateError } = await supabase
       .from('leave_requests')
-      .update({
-        leave_type: leaveType,
-        start_date: startDate,
-        end_date: endDate,
-        duration_days: workingDays,
-        reason,
-        status: 'pending',         // reset for re-approval
-        approver_id: null,
-        approver_comment: null,
-        actioned_at: null,
-      })
+      .update({ leave_type: leaveType, start_date: startDate, end_date: endDate, reason })
       .eq('id', request.id);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(errorMessage(updateError));
       setSaving(false);
       return;
     }
@@ -165,22 +142,36 @@ function EditModal({ request, onClose, onSave }: {
 }
 
 // ── Delete Confirm Modal ────────────────────────────────────────────────────
-function DeleteModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+function ConfirmModal({ mode, onClose, onConfirm }: {
+  mode: 'delete' | 'cancel';
+  onClose: () => void;
+  onConfirm: () => Promise<string | null>;
+}) {
   const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+  const copy = mode === 'delete'
+    ? { title: 'Delete leave request?', body: 'This action cannot be undone. The request will be permanently removed.', action: 'Delete', busy: 'Deleting…' }
+    : { title: 'Cancel this leave?', body: 'The request is kept as cancelled, the days go back to your balance, and the calendar event is removed. Your approver will be notified.', action: 'Cancel leave', busy: 'Cancelling…' };
+  const confirm = async () => {
+    setDeleting(true);
+    const err = await onConfirm();
+    if (err) { setError(err); setDeleting(false); }
+  };
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
         <div style={{ width: '44px', height: '44px', borderRadius: '11px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
           <AlertTriangle size={20} style={{ color: '#EF4444' }} />
         </div>
-        <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>Delete leave request?</h3>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '20px' }}>
-          This action cannot be undone. The request will be permanently removed.
+        <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>{copy.title}</h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: error ? '12px' : '20px' }}>
+          {copy.body}
         </p>
+        {error && <p style={{ fontSize: '13px', color: '#EF4444', marginBottom: '16px' }}>{error}</p>}
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-danger" onClick={() => { setDeleting(true); onConfirm(); setDeleting(false); }} disabled={deleting} style={{ opacity: deleting ? 0.7 : 1 }}>
-            <Trash2 size={13} /> {deleting ? 'Deleting…' : 'Delete'}
+          <button className="btn btn-ghost" onClick={onClose}>Keep it</button>
+          <button className="btn btn-danger" onClick={confirm} disabled={deleting} style={{ opacity: deleting ? 0.7 : 1 }}>
+            {mode === 'delete' ? <Trash2 size={13} /> : <Ban size={13} />} {deleting ? copy.busy : copy.action}
           </button>
         </div>
       </div>
@@ -189,12 +180,17 @@ function DeleteModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (
 }
 
 // ── Row Actions Dropdown ────────────────────────────────────────────────────
-function RowActions({ request, onEdit, onDelete }: {
+function RowActions({ request, onEdit, onDelete, onCancel }: {
   request: LeaveRequest;
   onEdit: () => void;
   onDelete: () => void;
+  onCancel: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const canEdit = request.status === 'pending';
+  const canDelete = request.status === 'pending' || request.status === 'rejected';
+  const canCancel = (request.status === 'approved' || request.status === 'pending_em_review')
+    && request.start_date > todayStr();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -205,9 +201,12 @@ function RowActions({ request, onEdit, onDelete }: {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  if (!canEdit && !canDelete && !canCancel) return <span />;
+
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
+        aria-label="Request actions"
         onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '6px', transition: 'background 0.12s ease' }}
         onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
@@ -225,7 +224,7 @@ function RowActions({ request, onEdit, onDelete }: {
           animation: 'scaleIn 0.12s ease',
         }}>
           {/* Edit — only for pending */}
-          {request.status === 'pending' && (
+          {canEdit && (
             <button
               onClick={e => { e.stopPropagation(); setOpen(false); onEdit(); }}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px', borderRadius: '7px', fontSize: '13px', color: 'var(--text-secondary)', transition: 'background 0.1s ease' }}
@@ -235,15 +234,16 @@ function RowActions({ request, onEdit, onDelete }: {
               <Pencil size={13} /> Edit request
             </button>
           )}
-          {/* Delete */}
-          <button
-            onClick={e => { e.stopPropagation(); setOpen(false); onDelete(); }}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px', borderRadius: '7px', fontSize: '13px', color: '#EF4444', transition: 'background 0.1s ease' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-          >
-            <Trash2 size={13} /> Delete
-          </button>
+          {(canDelete || canCancel) && (
+            <button
+              onClick={e => { e.stopPropagation(); setOpen(false); if (canDelete) onDelete(); else onCancel(); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px', borderRadius: '7px', fontSize: '13px', color: '#EF4444', transition: 'background 0.1s ease' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              {canDelete ? <><Trash2 size={13} /> Delete</> : <><Ban size={13} /> Cancel leave</>}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -258,7 +258,7 @@ export default function DashboardPage() {
   const [balance, setBalance] = useState<LeaveBalance | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<LeaveRequest | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{ id: string; mode: 'delete' | 'cancel' } | null>(null);
 
   const refreshBalance = async (uid: string) => {
     const bal = await getLeaveBalance(uid);
@@ -293,8 +293,7 @@ export default function DashboardPage() {
         if (leaves) setRequests(leaves as LeaveRequest[]);
 
         setUserId(user.id);
-        const bal = await getLeaveBalance(user.id);
-        setBalance(bal);
+        setBalance(await getLeaveBalance(user.id));
       } catch (err) {
         console.error('Dashboard fetch error:', err);
       } finally {
@@ -304,12 +303,28 @@ export default function DashboardPage() {
     fetchData();
   }, []);
 
+  // Each returns an error message, or null on success.
   const handleDelete = async (id: string) => {
-    const supabase = createClient();
-    await supabase.from('leave_requests').delete().eq('id', id);
+    const { error } = await createClient().from('leave_requests').delete().eq('id', id);
+    if (error) return errorMessage(error);
     setRequests(prev => prev.filter(r => r.id !== id));
-    setDeleteTarget(null);
+    setConfirmTarget(null);
     if (userId) await refreshBalance(userId);
+    return null;
+  };
+
+  const handleCancel = async (id: string) => {
+    const { error } = await createClient().rpc('cancel_leave_request', { p_request_id: id });
+    if (error) return errorMessage(error);
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' } : r));
+    setConfirmTarget(null);
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'cancelled', requestId: id }),
+    }).catch(console.error);
+    if (userId) await refreshBalance(userId);
+    return null;
   };
 
   const handleEditSave = async (id: string, updated: Partial<LeaveRequest>) => {
@@ -323,7 +338,7 @@ export default function DashboardPage() {
     }).catch(console.error);
   };
 
-  const pending = requests.filter(r => r.status === 'pending').length;
+  const pending = requests.filter(r => r.status === 'pending' || r.status === 'pending_em_review').length;
   const approved = requests.filter(r => r.status === 'approved').length;
   const rejected = requests.filter(r => r.status === 'rejected').length;
   const recentThree = requests.slice(0, 3);
@@ -339,11 +354,11 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Delete modal */}
-      {deleteTarget && (
-        <DeleteModal
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={() => handleDelete(deleteTarget)}
+      {confirmTarget && (
+        <ConfirmModal
+          mode={confirmTarget.mode}
+          onClose={() => setConfirmTarget(null)}
+          onConfirm={() => confirmTarget.mode === 'delete' ? handleDelete(confirmTarget.id) : handleCancel(confirmTarget.id)}
         />
       )}
 
@@ -387,10 +402,10 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '3px' }}>
-                        {leaveTypeLabel[r.leave_type]}
+                        {leaveTypeLabel(r.leave_type)}
                       </p>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {format(new Date(r.start_date), 'dd MMM')} – {format(new Date(r.end_date), 'dd MMM yyyy')} · {r.duration_days}d
+                        {formatDate(r.start_date, 'dd MMM')} – {formatDate(r.end_date, 'dd MMM yyyy')} · {r.duration_days}d
                       </p>
                     </div>
                     <StatusBadge status={r.status} />
@@ -511,10 +526,10 @@ export default function DashboardPage() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {statusIcon[r.status]}
-                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{leaveTypeLabel[r.leave_type]}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{leaveTypeLabel(r.leave_type)}</span>
                 </div>
                 <span className="req-col-dates" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  {format(new Date(r.start_date), 'dd MMM')} – {format(new Date(r.end_date), 'dd MMM yyyy')}
+                  {formatDate(r.start_date, 'dd MMM')} – {formatDate(r.end_date, 'dd MMM yyyy')}
                 </span>
                 <span className="req-col-days" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.duration_days}d</span>
                 <div><StatusBadge status={r.status} /></div>
@@ -523,7 +538,8 @@ export default function DashboardPage() {
                 <RowActions
                   request={r}
                   onEdit={() => setEditTarget(r)}
-                  onDelete={() => setDeleteTarget(r.id)}
+                  onDelete={() => setConfirmTarget({ id: r.id, mode: 'delete' })}
+                  onCancel={() => setConfirmTarget({ id: r.id, mode: 'cancel' })}
                 />
               </div>
             ))

@@ -43,7 +43,7 @@ export default function LandingNavbar() {
         <Link href="/login" className="btn btn-ghost" style={{ fontSize: '14px', padding: '8px 18px' }}>
           Log in
         </Link>
-        <Link href="/signup" className="btn btn-primary" style={{ fontSize: '14px', padding: '8px 18px' }}>
+        <Link href="/login" className="btn btn-primary" style={{ fontSize: '14px', padding: '8px 18px' }}>
           Get started
         </Link>
       </div>

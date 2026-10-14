@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
-import { createCalendarEvent } from '@/lib/google-calendar';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { createCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar';
+import { LINE_MANAGER_ROLES, type Role } from '@/lib/roles';
 import {
   submittedEmail,
   approvedEmail,
@@ -10,81 +12,92 @@ import {
   lineManagerActionEmail,
   headOfProductObserverEmail,
   coverPersonEmail,
+  cancelledEmail,
 } from '@/lib/email-templates';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseAdmin = createAdminClient();
 
 const FROM = 'Spotflow Leave <support@spotflow.one>';
 
-type NotifyEvent = 'submitted' | 'approved' | 'rejected' | 'em_review';
+type NotifyEvent = 'submitted' | 'em_review' | 'approved' | 'rejected' | 'cancelled';
 
-const LINE_MANAGER_ROLES = ['frontend_line_manager', 'backend_line_manager', 'line_manager'];
+/**
+ * Who may send each notification, and the status the request must be in.
+ * The status change itself already happened through RLS or an RPC; this
+ * route only sends the side effects for it.
+ */
+const EVENT_RULES: Record<NotifyEvent, { actor: 'requester' | 'approver'; status: string }> = {
+  submitted: { actor: 'requester', status: 'pending' },
+  em_review: { actor: 'approver', status: 'pending_em_review' },
+  approved: { actor: 'approver', status: 'approved' },
+  rejected: { actor: 'approver', status: 'rejected' },
+  cancelled: { actor: 'requester', status: 'cancelled' },
+};
 
-const ENGINEERING_ROLES = [
-  'frontend_engineer', 'backend_engineer', 'qa_engineer',
-  'frontend_line_manager', 'backend_line_manager', 'line_manager', 'engineer',
-];
-const ENGINEERING_TEAMS = ['frontend', 'backend'];
+type Person = { id: string; full_name: string; email: string; role: string; team: string };
 
-function getApproverRole(requesterRole: string, requesterTeam: string): string {
-  if (requesterRole === 'frontend_engineer') return 'frontend_line_manager';
-  if (requesterRole === 'backend_engineer') return 'backend_line_manager';
-  if (requesterRole === 'engineer' && requesterTeam === 'frontend') return 'frontend_line_manager';
-  if (requesterRole === 'engineer' && requesterTeam === 'backend') return 'backend_line_manager';
-  if (requesterRole === 'qa_engineer') return 'engineering_manager';
-  if (requesterRole === 'operations') return 'head_of_operations';
-  if (requesterRole === 'marketing') return 'head_of_operations';
-  if (requesterRole === 'product_designer') return 'head_of_product';
-  if (requesterRole === 'product_manager') return 'head_of_product';
-  if (LINE_MANAGER_ROLES.includes(requesterRole)) return 'engineering_manager';
-  if (requesterRole === 'engineering_manager') return 'head_of_product';
-  return 'engineering_manager';
-}
-
-async function getProfilesByRole(role: string): Promise<{ full_name: string; email: string }[]> {
+async function getProfilesByRole(role: string, excludeId?: string): Promise<Person[]> {
   const { data } = await supabaseAdmin
     .from('profiles')
-    .select('full_name, email')
+    .select('id, full_name, email, role, team')
     .eq('role', role)
     .limit(10);
-  return data ?? [];
+  return (data ?? []).filter((p) => p.id !== excludeId);
+}
+
+async function sendAll(messages: { to: string; subject: string; html: string }[]) {
+  const results = await Promise.allSettled(
+    messages.map((m) => resend.emails.send({ from: FROM, ...m }))
+  );
+  let failed = 0;
+  results.forEach((result, i) => {
+    // Resend reports API errors in the response rather than throwing.
+    const error = result.status === 'rejected' ? result.reason : result.value.error;
+    if (error) {
+      failed++;
+      console.error(`Email to ${messages[i].to} failed:`, error);
+    }
+  });
+  return { sent: messages.length - failed, failed };
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { event, requestId } = (await req.json()) as { event: NotifyEvent; requestId: string };
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+    }
 
-    if (!event || !requestId) {
-      return NextResponse.json({ error: 'Missing event or requestId' }, { status: 400 });
+    const { event, requestId } = (await req.json()) as { event: NotifyEvent; requestId: string };
+    const rule = EVENT_RULES[event];
+    if (!rule || !requestId) {
+      return NextResponse.json({ error: 'Missing or unknown event / requestId' }, { status: 400 });
     }
 
     const { data: leave, error: leaveErr } = await supabaseAdmin
       .from('leave_requests')
       .select(`
-        id, leave_type, start_date, end_date, duration_days, reason,
-        cover_notes, cover_person_email, status, approver_comment,
+        id, requester_id, approver_id, line_manager_id, leave_type, start_date, end_date,
+        duration_days, reason, cover_notes, cover_person_email, status, approver_comment,
         requester:profiles!leave_requests_requester_id_fkey(id, full_name, email, role, team),
-        approver:profiles!leave_requests_approver_id_fkey(id, full_name, role)
+        approver:profiles!leave_requests_approver_id_fkey(id, full_name, email, role, team)
       `)
       .eq('id', requestId)
       .single();
 
     if (leaveErr || !leave) {
-      console.error('Leave fetch error:', leaveErr);
       return NextResponse.json({ error: 'Leave request not found' }, { status: 404 });
     }
 
-    const requester = leave.requester as unknown as {
-      id: string; full_name: string; email: string; role: string; team: string;
-    };
-    const approver = leave.approver as unknown as {
-      id: string; full_name: string; role: string;
-    } | null;
+    const actorId = rule.actor === 'requester' ? leave.requester_id : leave.approver_id;
+    if (actorId !== user.id || leave.status !== rule.status) {
+      return NextResponse.json({ error: 'Not allowed' }, { status: 403 });
+    }
+
+    const requester = leave.requester as unknown as Person;
+    const approver = leave.approver as unknown as Person | null;
 
     const leaveDetails = {
       requesterName: requester.full_name,
@@ -98,139 +111,94 @@ export async function POST(req: NextRequest) {
       approverComment: leave.approver_comment ?? '',
     };
 
-    // ------------------------------------------------------------------
-    // SUBMITTED
-    // ------------------------------------------------------------------
+    const messages: { to: string; subject: string; html: string }[] = [];
+
     if (event === 'submitted') {
-      const approverRole = getApproverRole(requester.role, requester.team);
-      const primaryApprovers = await getProfilesByRole(approverRole);
+      const { data: approverRole } = await supabaseAdmin.rpc('approver_role_for', {
+        p_role: requester.role,
+        p_team: requester.team,
+      });
+      const approvers = await getProfilesByRole(approverRole as string, requester.id);
+      approvers.forEach((a) => messages.push({ to: a.email, ...submittedEmail(leaveDetails, a.full_name) }));
 
-      if (primaryApprovers.length === 0) {
-        console.warn(`No approver found for role: ${approverRole}`);
-        return NextResponse.json({ ok: true, warning: 'No approver found' });
+      // The engineering manager is copied on requests their line managers handle.
+      if (LINE_MANAGER_ROLES.includes(approverRole as Role)) {
+        const ems = await getProfilesByRole('engineering_manager', requester.id);
+        ems.forEach((m) => messages.push({ to: m.email, ...submittedEmail(leaveDetails, m.full_name) }));
       }
 
-      await Promise.all(
-        primaryApprovers.map((a) => {
-          const { subject, html } = submittedEmail(leaveDetails, a.full_name);
-          return resend.emails.send({ from: FROM, to: a.email, subject, html });
-        })
-      );
-
-      const isEngineeringRequest =
-        ENGINEERING_ROLES.includes(requester.role) ||
-        (requester.role === 'engineer' && ENGINEERING_TEAMS.includes(requester.team));
-
-      if (isEngineeringRequest && approverRole !== 'engineering_manager') {
-        const engManagers = await getProfilesByRole('engineering_manager');
-        await Promise.all(
-          engManagers.map((m) => {
-            const { subject, html } = submittedEmail(leaveDetails, m.full_name);
-            return resend.emails.send({ from: FROM, to: m.email, subject, html });
-          })
-        );
+      if (leave.cover_person_email) {
+        messages.push({ to: leave.cover_person_email, ...coverPersonEmail(leaveDetails, leave.cover_person_email) });
       }
 
-      const coverEmail = leave.cover_person_email as string | null;
-      if (coverEmail) {
-        const { subject, html } = coverPersonEmail(leaveDetails, coverEmail);
-        await resend.emails.send({ from: FROM, to: coverEmail, subject, html });
-      }
-
-      return NextResponse.json({ ok: true, sent: primaryApprovers.length });
+      const result = await sendAll(messages);
+      return NextResponse.json({ ok: true, ...result, warning: approvers.length ? undefined : `No ${approverRole} found` });
     }
 
-    // ------------------------------------------------------------------
-    // EM_REVIEW — line manager approved, notify EM to vet
-    // ------------------------------------------------------------------
     if (event === 'em_review') {
-      const lineManagerName = approver?.full_name ?? 'Line Manager';
-      const engManagers = await getProfilesByRole('engineering_manager');
-
-      if (engManagers.length === 0) {
-        console.warn('No engineering_manager found for EM vetting notification');
-        return NextResponse.json({ ok: true, warning: 'No EM found' });
-      }
-
-      await Promise.all(
-        engManagers.map((m) => {
-          const { subject, html } = emVettingEmail(leaveDetails, m.full_name, lineManagerName);
-          return resend.emails.send({ from: FROM, to: m.email, subject, html });
-        })
-      );
-
-      return NextResponse.json({ ok: true, sent: engManagers.length });
+      const ems = await getProfilesByRole('engineering_manager', requester.id);
+      ems.forEach((m) => messages.push({
+        to: m.email,
+        ...emVettingEmail(leaveDetails, m.full_name, approver?.full_name ?? 'Line Manager'),
+      }));
+      const result = await sendAll(messages);
+      return NextResponse.json({ ok: true, ...result });
     }
 
-    // ------------------------------------------------------------------
-    // APPROVED — final approval: email engineer + create calendar event
-    // ------------------------------------------------------------------
-    if (event === 'approved') {
-      const { subject: reqSubject, html: reqHtml } = approvedEmail(leaveDetails);
-      await resend.emails.send({ from: FROM, to: requester.email, subject: reqSubject, html: reqHtml });
-
-      if (approver && LINE_MANAGER_ROLES.includes(approver.role)) {
-        const engManagers = await getProfilesByRole('engineering_manager');
-        await Promise.all(
-          engManagers.map((m) => {
-            const { subject, html } = lineManagerActionEmail(leaveDetails, approver.full_name, 'approved');
-            return resend.emails.send({ from: FROM, to: m.email, subject, html });
-          })
-        );
-      }
-
+    if (event === 'approved' || event === 'rejected') {
       const approverName = approver?.full_name ?? 'Your manager';
-      const hops = await getProfilesByRole('head_of_product');
-      await Promise.all(
-        hops.map((h) => {
-          const { subject, html } = headOfProductObserverEmail(leaveDetails, approverName, 'approved');
-          return resend.emails.send({ from: FROM, to: h.email, subject, html });
-        })
-      );
-
-      // Await this work so serverless runtimes do not stop before Google receives it.
-      const calendar = await createCalendarEvent(requester.id, {
-        requestId: leave.id,
-        leaveType: leave.leave_type,
-        startDate: leave.start_date,
-        endDate: leave.end_date,
-        reason: leave.reason ?? '',
+      messages.push({
+        to: requester.email,
+        ...(event === 'approved' ? approvedEmail(leaveDetails) : rejectedEmail(leaveDetails)),
       });
 
-      return NextResponse.json({ ok: true, calendar });
-    }
-
-    // ------------------------------------------------------------------
-    // REJECTED
-    // ------------------------------------------------------------------
-    if (event === 'rejected') {
-      const { subject: reqSubject, html: reqHtml } = rejectedEmail(leaveDetails);
-      await resend.emails.send({ from: FROM, to: requester.email, subject: reqSubject, html: reqHtml });
-
-      if (approver && LINE_MANAGER_ROLES.includes(approver.role)) {
-        const engManagers = await getProfilesByRole('engineering_manager');
-        await Promise.all(
-          engManagers.map((m) => {
-            const { subject, html } = lineManagerActionEmail(leaveDetails, approver.full_name, 'rejected');
-            return resend.emails.send({ from: FROM, to: m.email, subject, html });
-          })
-        );
+      if (approver && LINE_MANAGER_ROLES.includes(approver.role as Role)) {
+        const ems = await getProfilesByRole('engineering_manager', requester.id);
+        ems.forEach((m) => messages.push({
+          to: m.email,
+          ...lineManagerActionEmail(leaveDetails, approverName, event),
+        }));
       }
 
-      const approverName = approver?.full_name ?? 'Your manager';
-      const hops = await getProfilesByRole('head_of_product');
-      await Promise.all(
-        hops.map((h) => {
-          const { subject, html } = headOfProductObserverEmail(leaveDetails, approverName, 'rejected');
-          return resend.emails.send({ from: FROM, to: h.email, subject, html });
-        })
-      );
+      const hops = await getProfilesByRole('head_of_product', requester.id);
+      hops
+        .filter((h) => h.id !== approver?.id)
+        .forEach((h) => messages.push({ to: h.email, ...headOfProductObserverEmail(leaveDetails, approverName, event) }));
 
-      return NextResponse.json({ ok: true });
+      const result = await sendAll(messages);
+
+      // Await so serverless runtimes don't stop before Google receives it.
+      const calendar = event === 'approved'
+        ? await createCalendarEvent(requester.id, {
+            requestId: leave.id,
+            leaveType: leave.leave_type,
+            startDate: leave.start_date,
+            endDate: leave.end_date,
+            reason: leave.reason ?? '',
+          }).catch((err) => {
+            console.error('Calendar sync failed:', err);
+            return 'failed' as const;
+          })
+        : undefined;
+
+      return NextResponse.json({ ok: true, ...result, calendar });
     }
 
-    return NextResponse.json({ error: 'Unknown event type' }, { status: 400 });
-
+    // cancelled: tell whoever approved it, and remove the calendar event.
+    const deciders = new Set([leave.approver_id, leave.line_manager_id].filter(Boolean) as string[]);
+    if (deciders.size) {
+      const { data: people } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name, email')
+        .in('id', [...deciders]);
+      (people ?? []).forEach((p) => messages.push({ to: p.email, ...cancelledEmail(leaveDetails, p.full_name) }));
+    }
+    const result = await sendAll(messages);
+    const calendar = await deleteCalendarEvent(requester.id, leave.id).catch((err) => {
+      console.error('Calendar delete failed:', err);
+      return 'failed' as const;
+    });
+    return NextResponse.json({ ok: true, ...result, calendar });
   } catch (err) {
     console.error('Notify API error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -4,8 +4,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, PlusCircle, ClipboardList, History, LogOut, ChevronRight, UserCog, CalendarDays, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useEffect, useState } from 'react';
+import { isManager, teamLabel as formatTeam, type Role } from '@/lib/roles';
 
-type Role = 'engineer' | 'frontend_engineer' | 'backend_engineer' | 'product_designer' | 'product_manager' | 'frontend_line_manager' | 'backend_line_manager' | 'engineering_manager' | 'head_of_product' | 'line_manager';
 
 interface Profile {
   full_name: string;
@@ -25,10 +25,6 @@ const managerNav = [
   { label: 'History', href: '/manager/history', icon: <History size={16} /> },
   { label: 'Calendar', href: '/calendar', icon: <CalendarDays size={16} /> },
 ];
-
-function isManager(role: Role) {
-  return ['frontend_line_manager', 'backend_line_manager', 'engineering_manager', 'head_of_product', 'line_manager'].includes(role);
-}
 
 const SpotflowLogo = () => (
   <svg width="22" height="22" viewBox="0 0 26 24" fill="none">
@@ -78,9 +74,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose:
 
   const isManagerRole = profile ? isManager(profile.role) : false;
   const initials = profile?.full_name?.charAt(0) ?? '?';
-  const teamLabel = profile?.team
-    ? profile.team.charAt(0).toUpperCase() + profile.team.slice(1)
-    : '';
+  const teamLabel = profile?.team ? formatTeam(profile.team) : '';
   const showAdmin = profile?.is_admin === true;
 
   return (

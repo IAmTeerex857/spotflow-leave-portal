@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Spotflow Leave Portal",
-  description: "Internal leave management for the Spotflow engineering team.",
+  description: "Request, approve and track leave across Spotflow.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

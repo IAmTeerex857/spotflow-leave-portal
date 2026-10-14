@@ -1,5 +1,5 @@
-import { format } from 'date-fns';
 import { getSiteUrl } from '@/lib/site-url';
+import { formatDate, leaveTypeLabel } from '@/lib/leave';
 
 const FONT_STACK = `'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
 const SITE_URL = getSiteUrl('https://spotflow-leave-portal.vercel.app');
@@ -126,6 +126,24 @@ function divider(): string {
   return `<div style="height:1px;background-color:rgba(255,255,255,0.06);margin:24px 0;"></div>`;
 }
 
+/** Escape user-supplied text before it goes into email HTML. */
+function esc(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!
+  ));
+}
+
+/** HTML-safe copy of the free-text fields in LeaveDetails. */
+function escDetails<T extends LeaveDetails & { coverNotes?: string }>(details: T): T {
+  return {
+    ...details,
+    requesterName: esc(details.requesterName),
+    reason: esc(details.reason),
+    approverComment: details.approverComment ? esc(details.approverComment) : details.approverComment,
+    coverNotes: details.coverNotes ? esc(details.coverNotes) : details.coverNotes,
+  };
+}
+
 interface LeaveDetails {
   requesterName: string;
   leaveType: string;
@@ -137,25 +155,22 @@ interface LeaveDetails {
   approverComment?: string;
 }
 
-const leaveTypeLabel: Record<string, string> = {
-  annual: 'Annual Leave', sick: 'Sick Leave', personal: 'Personal', other: 'Other',
-};
 
 export function submittedEmail(details: LeaveDetails, approverName: string): { subject: string; html: string } {
-  const { requesterName, leaveType, startDate, endDate, durationDays, reason } = details;
-  const formattedStart = format(new Date(startDate), 'dd MMM yyyy');
-  const formattedEnd = format(new Date(endDate), 'dd MMM yyyy');
+  const { requesterName, leaveType, startDate, endDate, durationDays, reason } = escDetails(details);
+  const formattedStart = formatDate(startDate);
+  const formattedEnd = formatDate(endDate);
 
   const content = `
     ${statusChip('New Request', '#A5B4FC', 'rgba(99,102,241,0.12)', 'rgba(99,102,241,0.25)')}
 
     <h1 style="font-family:${FONT_STACK};font-size:26px;font-weight:800;color:#F4F4F5;margin:18px 0 10px;letter-spacing:-0.03em;line-height:1.15;">Action required</h1>
     <p style="font-family:${FONT_STACK};font-size:14px;color:#A1A1AA;margin:0 0 28px;line-height:1.7;">
-      Hi ${approverName} — <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong> has submitted a leave request awaiting your approval.
+      Hi ${esc(approverName)} — <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong> has submitted a leave request awaiting your approval.
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
-      ${detailRow('Leave type', leaveTypeLabel[leaveType] ?? leaveType)}
+      ${detailRow('Leave type', leaveTypeLabel(leaveType))}
       ${detailRow('From', formattedStart)}
       ${detailRow('To', formattedEnd)}
       ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`, !reason)}
@@ -170,15 +185,15 @@ export function submittedEmail(details: LeaveDetails, approverName: string): { s
   `;
 
   return {
-    subject: `Leave request from ${requesterName} — action required`,
+    subject: `Leave request from ${details.requesterName} — action required`,
     html: wrapper(`${requesterName} has submitted a leave request that needs your review.`, content),
   };
 }
 
 export function approvedEmail(details: LeaveDetails): { subject: string; html: string } {
-  const { requesterName, leaveType, startDate, endDate, durationDays } = details;
-  const formattedStart = format(new Date(startDate), 'dd MMM yyyy');
-  const formattedEnd = format(new Date(endDate), 'dd MMM yyyy');
+  const { requesterName, leaveType, startDate, endDate, durationDays } = escDetails(details);
+  const formattedStart = formatDate(startDate);
+  const formattedEnd = formatDate(endDate);
 
   const content = `
     ${statusChip('Approved', '#86EFAC', 'rgba(34,197,94,0.1)', 'rgba(34,197,94,0.2)')}
@@ -189,7 +204,7 @@ export function approvedEmail(details: LeaveDetails): { subject: string; html: s
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
-      ${detailRow('Leave type', leaveTypeLabel[leaveType] ?? leaveType)}
+      ${detailRow('Leave type', leaveTypeLabel(leaveType))}
       ${detailRow('From', formattedStart)}
       ${detailRow('To', formattedEnd)}
       ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`)}
@@ -208,9 +223,9 @@ export function approvedEmail(details: LeaveDetails): { subject: string; html: s
 }
 
 export function rejectedEmail(details: LeaveDetails): { subject: string; html: string } {
-  const { requesterName, leaveType, startDate, endDate, durationDays, approverComment } = details;
-  const formattedStart = format(new Date(startDate), 'dd MMM yyyy');
-  const formattedEnd = format(new Date(endDate), 'dd MMM yyyy');
+  const { requesterName, leaveType, startDate, endDate, durationDays, approverComment } = escDetails(details);
+  const formattedStart = formatDate(startDate);
+  const formattedEnd = formatDate(endDate);
 
   const content = `
     ${statusChip('Not Approved', '#FCA5A5', 'rgba(239,68,68,0.1)', 'rgba(239,68,68,0.2)')}
@@ -221,7 +236,7 @@ export function rejectedEmail(details: LeaveDetails): { subject: string; html: s
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
-      ${detailRow('Leave type', leaveTypeLabel[leaveType] ?? leaveType)}
+      ${detailRow('Leave type', leaveTypeLabel(leaveType))}
       ${detailRow('From', formattedStart)}
       ${detailRow('To', formattedEnd)}
       ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`)}
@@ -247,9 +262,9 @@ export function lineManagerActionEmail(
   approverName: string,
   outcome: 'approved' | 'rejected'
 ): { subject: string; html: string } {
-  const { requesterName, leaveType, startDate, endDate, durationDays, approverComment } = details;
-  const formattedStart = format(new Date(startDate), 'dd MMM yyyy');
-  const formattedEnd = format(new Date(endDate), 'dd MMM yyyy');
+  const { requesterName, leaveType, startDate, endDate, durationDays, approverComment } = escDetails(details);
+  const formattedStart = formatDate(startDate);
+  const formattedEnd = formatDate(endDate);
   const outcomeLabel = outcome === 'approved' ? 'approved' : 'rejected';
   const chipColor = outcome === 'approved'
     ? { text: '#86EFAC', bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.2)' }
@@ -260,12 +275,12 @@ export function lineManagerActionEmail(
 
     <h1 style="font-family:${FONT_STACK};font-size:26px;font-weight:800;color:#F4F4F5;margin:18px 0 10px;letter-spacing:-0.03em;line-height:1.15;">Leave ${outcomeLabel}</h1>
     <p style="font-family:${FONT_STACK};font-size:14px;color:#A1A1AA;margin:0 0 28px;line-height:1.7;">
-      <strong style="color:#E4E4E7;font-weight:600;">${approverName}</strong> has ${outcomeLabel} a leave request from <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong>.
+      <strong style="color:#E4E4E7;font-weight:600;">${esc(approverName)}</strong> has ${outcomeLabel} a leave request from <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong>.
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
       ${detailRow('Employee', requesterName)}
-      ${detailRow('Leave type', leaveTypeLabel[leaveType] ?? leaveType)}
+      ${detailRow('Leave type', leaveTypeLabel(leaveType))}
       ${detailRow('From', formattedStart)}
       ${detailRow('To', formattedEnd)}
       ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`)}
@@ -280,8 +295,8 @@ export function lineManagerActionEmail(
   `;
 
   return {
-    subject: `[FYI] ${requesterName}'s leave ${outcomeLabel} by ${approverName}`,
-    html: wrapper(`${approverName} has ${outcomeLabel} ${requesterName}'s leave request.`, content),
+    subject: `[FYI] ${details.requesterName}'s leave ${outcomeLabel} by ${approverName}`,
+    html: wrapper(`${esc(approverName)} has ${outcomeLabel} ${requesterName}'s leave request.`, content),
   };
 }
 
@@ -291,21 +306,21 @@ export function headOfProductObserverEmail(
   approverName: string,
   outcome: 'approved' | 'rejected'
 ): { subject: string; html: string } {
-  const { requesterName, leaveType, startDate, endDate, durationDays, approverComment } = details;
-  const formattedStart = format(new Date(startDate), 'dd MMM yyyy');
-  const formattedEnd = format(new Date(endDate), 'dd MMM yyyy');
+  const { requesterName, leaveType, startDate, endDate, durationDays, approverComment } = escDetails(details);
+  const formattedStart = formatDate(startDate);
+  const formattedEnd = formatDate(endDate);
 
   const content = `
     ${statusChip('Company Leave Update', '#A5B4FC', 'rgba(99,102,241,0.1)', 'rgba(99,102,241,0.2)')}
 
     <h1 style="font-family:${FONT_STACK};font-size:26px;font-weight:800;color:#F4F4F5;margin:18px 0 10px;letter-spacing:-0.03em;line-height:1.15;">Leave ${outcome}</h1>
     <p style="font-family:${FONT_STACK};font-size:14px;color:#A1A1AA;margin:0 0 28px;line-height:1.7;">
-      For your awareness — <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong>'s leave request has been ${outcome} by <strong style="color:#E4E4E7;font-weight:600;">${approverName}</strong>.
+      For your awareness — <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong>'s leave request has been ${outcome} by <strong style="color:#E4E4E7;font-weight:600;">${esc(approverName)}</strong>.
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
       ${detailRow('Employee', requesterName)}
-      ${detailRow('Leave type', leaveTypeLabel[leaveType] ?? leaveType)}
+      ${detailRow('Leave type', leaveTypeLabel(leaveType))}
       ${detailRow('From', formattedStart)}
       ${detailRow('To', formattedEnd)}
       ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`)}
@@ -320,8 +335,8 @@ export function headOfProductObserverEmail(
   `;
 
   return {
-    subject: `[Company] ${requesterName}'s leave ${outcome}`,
-    html: wrapper(`${requesterName}'s leave was ${outcome} by ${approverName}.`, content),
+    subject: `[Company] ${details.requesterName}'s leave ${outcome}`,
+    html: wrapper(`${requesterName}'s leave was ${outcome} by ${esc(approverName)}.`, content),
   };
 }
 
@@ -331,22 +346,22 @@ export function emVettingEmail(
   emName: string,
   lineManagerName: string
 ): { subject: string; html: string } {
-  const { requesterName, leaveType, startDate, endDate, durationDays, reason } = details;
-  const formattedStart = format(new Date(startDate), 'dd MMM yyyy');
-  const formattedEnd = format(new Date(endDate), 'dd MMM yyyy');
+  const { requesterName, leaveType, startDate, endDate, durationDays, reason } = escDetails(details);
+  const formattedStart = formatDate(startDate);
+  const formattedEnd = formatDate(endDate);
 
   const content = `
     ${statusChip('Awaiting Your Review', '#A78BFA', 'rgba(139,92,246,0.12)', 'rgba(139,92,246,0.25)')}
 
     <h1 style="font-family:${FONT_STACK};font-size:26px;font-weight:800;color:#F4F4F5;margin:18px 0 10px;letter-spacing:-0.03em;line-height:1.15;">Leave approved by line manager — please vet</h1>
     <p style="font-family:${FONT_STACK};font-size:14px;color:#A1A1AA;margin:0 0 28px;line-height:1.7;">
-      Hi ${emName} — <strong style="color:#E4E4E7;font-weight:600;">${lineManagerName}</strong> has approved a leave request from <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong>. Please review and confirm or override the decision.
+      Hi ${esc(emName)} — <strong style="color:#E4E4E7;font-weight:600;">${esc(lineManagerName)}</strong> has approved a leave request from <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong>. Please review and confirm or override the decision.
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
       ${detailRow('Employee', requesterName)}
       ${detailRow('Approved by', lineManagerName)}
-      ${detailRow('Leave type', leaveTypeLabel[leaveType] ?? leaveType)}
+      ${detailRow('Leave type', leaveTypeLabel(leaveType))}
       ${detailRow('From', formattedStart)}
       ${detailRow('To', formattedEnd)}
       ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`, !reason)}
@@ -362,8 +377,8 @@ export function emVettingEmail(
   `;
 
   return {
-    subject: `[Review needed] ${requesterName}'s leave approved by ${lineManagerName}`,
-    html: wrapper(`${lineManagerName} approved ${requesterName}'s leave — your confirmation is needed.`, content),
+    subject: `[Review needed] ${details.requesterName}'s leave approved by ${lineManagerName}`,
+    html: wrapper(`${esc(lineManagerName)} approved ${requesterName}'s leave — your confirmation is needed.`, content),
   };
 }
 
@@ -372,21 +387,21 @@ export function coverPersonEmail(
   details: LeaveDetails & { coverNotes?: string },
   recipientEmail: string
 ): { subject: string; html: string } {
-  const { requesterName, leaveType, startDate, endDate, durationDays, coverNotes } = details;
-  const formattedStart = format(new Date(startDate), 'dd MMM yyyy');
-  const formattedEnd = format(new Date(endDate), 'dd MMM yyyy');
+  const { requesterName, leaveType, startDate, endDate, durationDays, coverNotes } = escDetails(details);
+  const formattedStart = formatDate(startDate);
+  const formattedEnd = formatDate(endDate);
 
   const content = `
     ${statusChip('Cover Request', '#FCD34D', 'rgba(245,158,11,0.1)', 'rgba(245,158,11,0.2)')}
 
     <h1 style="font-family:${FONT_STACK};font-size:26px;font-weight:800;color:#F4F4F5;margin:18px 0 10px;letter-spacing:-0.03em;line-height:1.15;">You've been listed as cover</h1>
     <p style="font-family:${FONT_STACK};font-size:14px;color:#A1A1AA;margin:0 0 28px;line-height:1.7;">
-      Hi ${recipientEmail} — <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong> has listed you as their work cover for the period below. This is a heads-up only.
+      Hi ${esc(recipientEmail)} — <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong> has listed you as their work cover for the period below. This is a heads-up only.
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
       ${detailRow('Colleague', requesterName)}
-      ${detailRow('Leave type', leaveTypeLabel[leaveType] ?? leaveType)}
+      ${detailRow('Leave type', leaveTypeLabel(leaveType))}
       ${detailRow('From', formattedStart)}
       ${detailRow('To', formattedEnd)}
       ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`, !coverNotes)}
@@ -400,7 +415,40 @@ export function coverPersonEmail(
   `;
 
   return {
-    subject: `${requesterName} has listed you as their cover (${formattedStart} – ${formattedEnd})`,
+    subject: `${details.requesterName} has listed you as their cover (${formattedStart} – ${formattedEnd})`,
     html: wrapper(`${requesterName} is away ${formattedStart}–${formattedEnd} and has listed you as their cover.`, content),
+  };
+}
+
+/** Sent to whoever approved a leave when the employee cancels it */
+export function cancelledEmail(details: LeaveDetails, recipientName: string): { subject: string; html: string } {
+  const { requesterName, leaveType, startDate, endDate, durationDays } = escDetails(details);
+  const formattedStart = formatDate(startDate);
+  const formattedEnd = formatDate(endDate);
+
+  const content = `
+    ${statusChip('Cancelled', '#A1A1AA', 'rgba(113,113,122,0.12)', 'rgba(113,113,122,0.25)')}
+
+    <h1 style="font-family:${FONT_STACK};font-size:26px;font-weight:800;color:#F4F4F5;margin:18px 0 10px;letter-spacing:-0.03em;line-height:1.15;">Leave cancelled</h1>
+    <p style="font-family:${FONT_STACK};font-size:14px;color:#A1A1AA;margin:0 0 28px;line-height:1.7;">
+      Hi ${esc(recipientName)} — <strong style="color:#E4E4E7;font-weight:600;">${requesterName}</strong> has cancelled their leave. The days have been returned to their balance.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:4px;">
+      ${detailRow('Employee', requesterName)}
+      ${detailRow('Leave type', leaveTypeLabel(leaveType))}
+      ${detailRow('From', formattedStart)}
+      ${detailRow('To', formattedEnd)}
+      ${detailRow('Duration', `${durationDays} working day${durationDays !== 1 ? 's' : ''}`, true)}
+    </table>
+
+    ${divider()}
+
+    <p style="font-family:${FONT_STACK};font-size:12px;color:#52525B;margin:0;text-align:center;">No action is required.</p>
+  `;
+
+  return {
+    subject: `${details.requesterName} cancelled their leave (${formattedStart} – ${formattedEnd})`,
+    html: wrapper(`${requesterName} cancelled their leave from ${formattedStart} to ${formattedEnd}.`, content),
   };
 }

@@ -3,15 +3,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Users } from 'lucide-react';
-import AppShell from '@/components/layout/AppShell';
+import { TEAMS } from '@/lib/roles';
 
-const TEAMS = [
-  { value: 'backend', label: 'Backend Engineering' },
-  { value: 'frontend', label: 'Frontend Engineering' },
-  { value: 'product', label: 'Product' },
-  { value: 'design', label: 'Design' },
-  { value: 'operations', label: 'Operations' },
-];
 
 export default function OnboardingPage() {
   const router = useRouter();

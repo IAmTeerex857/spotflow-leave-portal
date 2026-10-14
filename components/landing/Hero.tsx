@@ -87,12 +87,9 @@ export default function Hero() {
 
         {/* CTAs */}
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Link href="/signup" className="btn btn-primary btn-lg">
-            Request access
+          <Link href="/login" className="btn btn-primary btn-lg">
+            Sign in with Google
             <ArrowRight size={16} />
-          </Link>
-          <Link href="/login" className="btn btn-ghost btn-lg">
-            Log in to portal
           </Link>
         </div>
 

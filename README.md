@@ -11,6 +11,24 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Database
+
+The schema lives in `supabase/migrations/` and is managed with the Supabase CLI (installed as a dev dependency). The repo is linked to the `Leave Portal` project (`vomkjutzcgqivzlzmsoc`).
+
+```bash
+npx supabase login                     # once per machine
+npx supabase migration new <name>      # create a migration
+npx supabase db push                   # apply pending migrations to the linked project
+```
+
+Never edit the schema from the dashboard SQL editor; write a migration so the repo stays the source of truth.
+
+Key pieces:
+
+- **Approval routing** is defined once, in `public.approver_role_for(role, team)`. RLS, the manager queue (`approval_queue()`), approvals (`decide_leave_request()`) and email routing all use it.
+- **Leave length and allowance** are computed by the database from the `public_holidays` table. Add holidays there (Table Editor works) as the Federal Government announces them; Islamic holiday dates are seeded as provisional.
+- **Sign-in** is limited to Google accounts on `@spotflow.one` by the `handle_new_user` trigger.
+
 ## Production Authentication
 
 Set this environment variable in the Vercel Production environment:

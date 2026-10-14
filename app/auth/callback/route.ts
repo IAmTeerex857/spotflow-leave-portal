@@ -1,5 +1,5 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { syncApprovedLeaveEvents } from '@/lib/google-calendar';
 import { getSiteUrl } from '@/lib/site-url';
 import { cookies } from 'next/headers';
@@ -11,7 +11,10 @@ export async function GET(request: Request) {
   const origin = getSiteUrl(requestUrl.origin);
 
   if (!code) {
-    return NextResponse.redirect(new URL('/login', origin));
+    // Supabase reports sign-up failures here, e.g. the handle_new_user
+    // trigger rejecting an account outside @spotflow.one.
+    const failed = requestUrl.searchParams.has('error');
+    return NextResponse.redirect(new URL(failed ? '/login?error=not_allowed' : '/login', origin));
   }
 
   const cookieStore = await cookies();
@@ -57,10 +60,7 @@ export async function GET(request: Request) {
   // Only present when Google returns it (first login, or after re-consent with prompt=consent)
   if (session?.provider_refresh_token) {
     try {
-      const supabaseAdmin = createAdminClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
+      const supabaseAdmin = createAdminClient();
       const { error: tokenError } = await supabaseAdmin.from('user_tokens').upsert({
         user_id: user.id,
         provider: 'google',

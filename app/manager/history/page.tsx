@@ -5,10 +5,8 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { format } from 'date-fns';
 import { Search, Filter } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-
-const leaveTypeLabel: Record<string, string> = {
-  annual: 'Annual Leave', sick: 'Sick Leave', personal: 'Personal', other: 'Other',
-};
+import { formatDate, leaveTypeLabel, type LeaveStatus } from '@/lib/leave';
+import { teamLabel } from '@/lib/roles';
 
 interface Request {
   id: string;
@@ -16,12 +14,19 @@ interface Request {
   start_date: string;
   end_date: string;
   duration_days: number;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  status: LeaveStatus;
   created_at: string;
   requester: { full_name: string; team: string };
 }
 
-const STATUS_OPTIONS = ['all', 'pending', 'approved', 'rejected'];
+const STATUS_OPTIONS: { value: 'all' | LeaveStatus; label: string }[] = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'pending_em_review', label: 'EM review' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
 
 export default function ManagerHistoryPage() {
   const [requests, setRequests] = useState<Request[]>([]);
@@ -32,12 +37,14 @@ export default function ManagerHistoryPage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      // RLS limits this to people the manager approves for; drop their own.
       const { data } = await supabase
         .from('leave_requests')
         .select(`*, requester:profiles!leave_requests_requester_id_fkey(full_name, team)`)
         .order('created_at', { ascending: false });
 
-      if (data) setRequests(data as unknown as Request[]);
+      if (data) setRequests((data as unknown as (Request & { requester_id: string })[]).filter(r => r.requester_id !== user?.id));
       setLoading(false);
     };
     load();
@@ -69,7 +76,7 @@ export default function ManagerHistoryPage() {
             <Filter size={13} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none', zIndex: 1 }} />
             <select className="form-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ paddingLeft: '34px', minWidth: '150px' }}>
               {STATUS_OPTIONS.map(s => (
-                <option key={s} value={s}>{s === 'all' ? 'All statuses' : s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
           </div>
@@ -104,12 +111,12 @@ export default function ManagerHistoryPage() {
                           </div>
                           <div>
                             <p style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{r.requester.full_name}</p>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.requester.team}</p>
+                            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{teamLabel(r.requester.team)}</p>
                           </div>
                         </div>
                       </td>
-                      <td style={{ fontSize: '13px' }}>{leaveTypeLabel[r.leave_type]}</td>
-                      <td style={{ fontSize: '13px' }}>{format(new Date(r.start_date), 'dd MMM')} – {format(new Date(r.end_date), 'dd MMM yyyy')}</td>
+                      <td style={{ fontSize: '13px' }}>{leaveTypeLabel(r.leave_type)}</td>
+                      <td style={{ fontSize: '13px' }}>{formatDate(r.start_date, 'dd MMM')} – {formatDate(r.end_date, 'dd MMM yyyy')}</td>
                       <td style={{ fontSize: '13px' }}><span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{r.duration_days}</span>d</td>
                       <td><StatusBadge status={r.status} /></td>
                       <td style={{ fontSize: '12px' }}>{format(new Date(r.created_at), 'dd MMM yyyy')}</td>

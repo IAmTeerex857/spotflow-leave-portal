@@ -1,37 +1,12 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { getSiteUrl } from '@/lib/site-url';
+import { isManager } from '@/lib/roles';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/', '/login', '/signup', '/forgot-password', '/auth/callback', '/onboarding'];
+const PUBLIC_ROUTES = ['/', '/login', '/auth/callback'];
 const MANAGER_ROUTES = ['/manager'];
 const ADMIN_ROUTES = ['/admin'];
 
-type Role =
-  | 'engineer'
-  | 'frontend_engineer'
-  | 'backend_engineer'
-  | 'qa_engineer'
-  | 'operations'
-  | 'marketing'
-  | 'product_designer'
-  | 'product_manager'
-  | 'frontend_line_manager'
-  | 'backend_line_manager'
-  | 'engineering_manager'
-  | 'head_of_product'
-  | 'head_of_operations'
-  | 'line_manager';
-
-function isManager(role: Role) {
-  return [
-    'frontend_line_manager',
-    'backend_line_manager',
-    'engineering_manager',
-    'head_of_product',
-    'head_of_operations',
-    'line_manager',
-  ].includes(role);
-}
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -81,11 +56,14 @@ export async function proxy(request: NextRequest) {
 
   // Not logged in — redirect to login
   if (!user && !isPublic) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+    }
     return redirect('/login');
   }
 
   // Logged in — redirect away from auth pages and landing
-  if (user && ['/', '/login', '/signup'].includes(pathname)) {
+  if (user && ['/', '/login'].includes(pathname)) {
     return redirect('/dashboard');
   }
 
@@ -110,7 +88,7 @@ export async function proxy(request: NextRequest) {
 
     // Protect /manager — only manager roles
     if (MANAGER_ROUTES.some(r => pathname.startsWith(r))) {
-      if (!profile || !isManager(profile.role as Role)) {
+      if (!profile || !isManager(profile.role)) {
         return redirect('/403');
       }
     }

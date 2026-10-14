@@ -1,10 +1,7 @@
 import { google } from 'googleapis';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/admin';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseAdmin = createAdminClient();
 
 type LeaveCalendarDetails = {
   requestId: string;
@@ -20,6 +17,11 @@ const leaveTypeLabels: Record<string, string> = {
   personal: 'Personal Leave',
   other: 'Leave',
 };
+
+/** Google event IDs must be base32hex; a UUID without dashes qualifies. */
+function calendarEventId(requestId: string) {
+  return requestId.replaceAll('-', '');
+}
 
 async function getCalendarClient(userId: string) {
   const { data: tokenRow, error: tokenError } = await supabaseAdmin
@@ -52,7 +54,7 @@ async function upsertCalendarEvent(
   const endExclusive = new Date(`${details.endDate}T00:00:00Z`);
   endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
 
-  const eventId = details.requestId.replaceAll('-', '');
+  const eventId = calendarEventId(details.requestId);
   const requestBody = {
     summary: leaveTypeLabels[details.leaveType] ?? 'Leave',
     start: { date: details.startDate },
@@ -115,4 +117,19 @@ export async function syncApprovedLeaveEvents(userId: string) {
   }
 
   return { synced: leaves?.length ?? 0, status: 'synced' as const };
+}
+
+/** Remove the event for a cancelled leave. Missing events are not an error. */
+export async function deleteCalendarEvent(userId: string, requestId: string) {
+  const calendar = await getCalendarClient(userId);
+  if (!calendar) return 'skipped_no_token' as const;
+
+  try {
+    await calendar.events.delete({ calendarId: 'primary', eventId: calendarEventId(requestId) });
+    return 'deleted' as const;
+  } catch (error) {
+    const code = (error as { code?: number }).code;
+    if (code === 404 || code === 410) return 'not_found' as const;
+    throw error;
+  }
 }

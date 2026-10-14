@@ -5,32 +5,26 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { format } from 'date-fns';
 import { CheckCircle, XCircle, CalendarDays, User, Clock, Gauge, Pencil, ShieldCheck } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { ANNUAL_ALLOWANCE } from '@/lib/leave-balance';
-import { countWorkingDays } from '@/lib/public-holidays';
+import { getLeaveBalances, type LeaveBalance } from '@/lib/leave-balance';
+import { countWorkingDays, useHolidays } from '@/lib/public-holidays';
+import { errorMessage, formatDate, leaveTypeLabel } from '@/lib/leave';
+import { LINE_MANAGER_ROLES, type Role } from '@/lib/roles';
 
-const leaveTypeLabel: Record<string, string> = {
-  annual: 'Annual Leave', sick: 'Sick Leave', personal: 'Personal', other: 'Other',
-};
-
-const LINE_MANAGER_ROLES = ['frontend_line_manager', 'backend_line_manager', 'line_manager'];
-
+/** Row shape returned by the approval_queue() RPC. */
 interface Request {
   id: string;
   requester_id: string;
-  requester: { full_name: string; team: string; role: string };
+  requester_name: string;
+  requester_team: string;
+  requester_role: string;
   leave_type: string;
   start_date: string;
   end_date: string;
   duration_days: number;
   reason: string;
-  status: 'pending' | 'pending_em_review' | 'approved' | 'rejected' | 'cancelled';
+  status: 'pending' | 'pending_em_review';
   created_at: string;
-}
-
-// Parse a YYYY-MM-DD string as local midnight (avoids UTC offset shifting the date)
-function parseLocalDate(dateStr: string): Date {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d);
+  line_manager_name: string | null;
 }
 
 // ── Reject / Override modal ──────────────────────────────────────────────────
@@ -95,11 +89,12 @@ function EditApproveModal({
   const [startDate, setStartDate] = useState(request.start_date);
   const [endDate, setEndDate] = useState(request.end_date);
   const [comment, setComment] = useState('');
+  const holidays = useHolidays();
 
-  const duration = useMemo(() => {
-    if (!startDate || !endDate || endDate < startDate) return 0;
-    return countWorkingDays(parseLocalDate(startDate), parseLocalDate(endDate));
-  }, [startDate, endDate]);
+  const duration = useMemo(
+    () => countWorkingDays(startDate, endDate, holidays),
+    [startDate, endDate, holidays],
+  );
 
   const datesChanged = startDate !== request.start_date || endDate !== request.end_date;
   const isValid = startDate && endDate && endDate >= startDate;
@@ -163,7 +158,7 @@ function EditApproveModal({
             fontSize: '12px',
             color: '#F59E0B',
           }}>
-            Dates modified from original: {format(parseLocalDate(request.start_date), 'dd MMM')} – {format(parseLocalDate(request.end_date), 'dd MMM yyyy')} ({request.duration_days}d)
+            Dates modified from original: {formatDate(request.start_date, 'dd MMM')} – {formatDate(request.end_date)} ({request.duration_days}d)
           </div>
         )}
 
@@ -201,7 +196,9 @@ export default function ManagerQueuePage() {
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
   const [rejectTarget, setRejectTarget] = useState<{ id: string; isOverride: boolean } | null>(null);
   const [editTarget, setEditTarget] = useState<Request | null>(null);
-  const [balances, setBalances] = useState<Record<string, number>>({});
+  const [balances, setBalances] = useState<Record<string, LeaveBalance>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => { loadRequests(); }, []);
 
@@ -211,160 +208,70 @@ export default function ManagerQueuePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      setCurrentUserRole(profile?.role ?? '');
 
-      const role = profile?.role ?? '';
-      setCurrentUserRole(role);
+      // The database decides what this user may act on (same rules as RLS).
+      const { data, error } = await supabase.rpc('approval_queue');
+      if (error) throw error;
+      const queue = (data ?? []) as Request[];
+      setRequests(queue);
 
-      // Engineering managers see both pending and pending_em_review
-      const statuses = role === 'engineering_manager'
-        ? ['pending', 'pending_em_review']
-        : ['pending'];
-
-      const { data } = await supabase
-        .from('leave_requests')
-        .select(`*, requester:profiles!leave_requests_requester_id_fkey(full_name, team, role)`)
-        .in('status', statuses)
-        .order('created_at', { ascending: false });
-
-      if (data) {
-        let filtered = (data as unknown as Request[])
-          // Never let a manager action their own request
-          .filter(r => r.requester_id !== user.id);
-
-        // Scope each role to only the requests they are responsible for
-        if (role === 'frontend_line_manager') {
-          filtered = filtered.filter(r =>
-            r.requester.role === 'frontend_engineer' ||
-            (r.requester.role === 'engineer' && r.requester.team === 'frontend')
-          );
-        } else if (role === 'backend_line_manager') {
-          filtered = filtered.filter(r =>
-            r.requester.role === 'backend_engineer' ||
-            (r.requester.role === 'engineer' && r.requester.team === 'backend')
-          );
-        } else if (role === 'line_manager') {
-          filtered = filtered.filter(r =>
-            ['frontend_engineer', 'backend_engineer', 'engineer'].includes(r.requester.role)
-          );
-        } else if (role === 'engineering_manager') {
-          // Directly approves: qa_engineer and line managers (pending)
-          // Vets after LM approval: pending_em_review
-          filtered = filtered.filter(r =>
-            r.status === 'pending_em_review' ||
-            (r.status === 'pending' && [
-              'qa_engineer', 'frontend_line_manager', 'backend_line_manager', 'line_manager',
-            ].includes(r.requester.role))
-          );
-        } else if (role === 'head_of_product') {
-          filtered = filtered.filter(r =>
-            ['product_designer', 'product_manager', 'engineering_manager'].includes(r.requester.role)
-          );
-        } else if (role === 'head_of_operations') {
-          filtered = filtered.filter(r =>
-            ['operations', 'marketing'].includes(r.requester.role)
-          );
-        }
-
-        setRequests(filtered);
-        const year = new Date().getFullYear();
-        const uniqueIds = [...new Set(filtered.map(r => r.requester_id))];
-        const { data: approved } = await supabase
-          .from('leave_requests')
-          .select('requester_id, duration_days')
-          .in('requester_id', uniqueIds)
-          .eq('status', 'approved')
-          .gte('start_date', `${year}-01-01`)
-          .lte('start_date', `${year}-12-31`);
-
-        const usedMap: Record<string, number> = {};
-        approved?.forEach(l => {
-          const id = l.requester_id as string;
-          usedMap[id] = (usedMap[id] ?? 0) + ((l.duration_days as number) ?? 0);
-        });
-        setBalances(usedMap);
+      const ids = [...new Set(queue.map(r => r.requester_id))];
+      if (ids.length) {
+        const rows = await getLeaveBalances(ids);
+        setBalances(Object.fromEntries(rows.map(b => [b.user_id, b])));
       }
+    } catch (err) {
+      setActionError(errorMessage(err, 'Could not load the queue.'));
     } finally {
       setLoading(false);
     }
   };
 
-  // Line managers route to pending_em_review; everyone else routes to approved
-  const getTargetStatus = () =>
-    LINE_MANAGER_ROLES.includes(currentUserRole) ? 'pending_em_review' : 'approved';
-
-  const getNotifyEvent = () =>
-    LINE_MANAGER_ROLES.includes(currentUserRole) ? 'em_review' : 'approved';
-
-  const handleApprove = async (id: string) => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('leave_requests').update({
-      status: getTargetStatus(),
-      approver_id: user?.id,
-      actioned_at: new Date().toISOString(),
-    }).eq('id', id);
-
+  const notify = (event: string, requestId: string) =>
     fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: getNotifyEvent(), requestId: id }),
+      body: JSON.stringify({ event, requestId }),
     }).catch(console.error);
 
+  const decide = async (
+    id: string,
+    decision: 'approve' | 'reject',
+    opts: { comment?: string; startDate?: string; endDate?: string } = {},
+  ) => {
+    setBusyId(id);
+    setActionError('');
+    const { data, error } = await createClient().rpc('decide_leave_request', {
+      p_request_id: id,
+      p_decision: decision,
+      p_comment: opts.comment ?? null,
+      p_start_date: opts.startDate ?? null,
+      p_end_date: opts.endDate ?? null,
+    });
+    setBusyId(null);
+
+    if (error) {
+      setActionError(errorMessage(error));
+      return false;
+    }
+
+    // Only notify about the status the database actually recorded.
+    const status = (data as { status: string }).status;
+    notify(status === 'pending_em_review' ? 'em_review' : status, id);
     setRequests(prev => prev.filter(r => r.id !== id));
+    return true;
   };
 
-  const handleEditApprove = async (
-    id: string,
-    startDate: string,
-    endDate: string,
-    duration: number,
-    comment: string,
-  ) => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('leave_requests').update({
-      start_date: startDate,
-      end_date: endDate,
-      duration_days: duration,
-      status: getTargetStatus(),
-      approver_id: user?.id,
-      approver_comment: comment || null,
-      actioned_at: new Date().toISOString(),
-    }).eq('id', id);
+  const handleApprove = (id: string) => decide(id, 'approve');
 
-    fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: getNotifyEvent(), requestId: id }),
-    }).catch(console.error);
-
-    setRequests(prev => prev.filter(r => r.id !== id));
-    setEditTarget(null);
+  const handleEditApprove = async (id: string, startDate: string, endDate: string, comment: string) => {
+    if (await decide(id, 'approve', { startDate, endDate, comment })) setEditTarget(null);
   };
 
   const handleReject = async (id: string, reason: string) => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('leave_requests').update({
-      status: 'rejected',
-      approver_id: user?.id,
-      approver_comment: reason,
-      actioned_at: new Date().toISOString(),
-    }).eq('id', id);
-
-    fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: 'rejected', requestId: id }),
-    }).catch(console.error);
-
-    setRequests(prev => prev.filter(r => r.id !== id));
-    setRejectTarget(null);
+    if (await decide(id, 'reject', { comment: reason })) setRejectTarget(null);
   };
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
@@ -385,14 +292,18 @@ export default function ManagerQueuePage() {
           request={editTarget}
           actionLabel={editTarget.status === 'pending_em_review' ? 'Confirm' : 'Approve'}
           onClose={() => setEditTarget(null)}
-          onSubmit={(start, end, dur, comment) => handleEditApprove(editTarget.id, start, end, dur, comment)}
+          onSubmit={(start, end, _dur, comment) => handleEditApprove(editTarget.id, start, end, comment)}
         />
       )}
 
       <header className="topbar">
         <div>
           <h1 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>Request Queue</h1>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>Pending requests from your team</p>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+            {LINE_MANAGER_ROLES.includes(currentUserRole as Role)
+              ? 'Your approvals go to the Engineering Manager for confirmation'
+              : 'Pending requests from your team'}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {pendingCount > 0 && (
@@ -409,6 +320,11 @@ export default function ManagerQueuePage() {
       </header>
 
       <div className="page-content fade-in">
+        {actionError && (
+          <div role="alert" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#EF4444' }}>
+            {actionError}
+          </div>
+        )}
         {loading ? (
           <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
         ) : requests.length === 0 ? (
@@ -420,10 +336,12 @@ export default function ManagerQueuePage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {requests.map(r => {
-              const used = balances[r.requester_id] ?? 0;
-              const remaining = Math.max(0, ANNUAL_ALLOWANCE - used);
-              const wouldExceed = used + r.duration_days > ANNUAL_ALLOWANCE;
+              const balance = balances[r.requester_id];
+              const remaining = balance?.remaining ?? 0;
+              // This request's own days are already in balance.pending.
+              const wouldExceed = balance ? balance.used + balance.pending > balance.allowance : false;
               const isEmReview = r.status === 'pending_em_review';
+              const busy = busyId === r.id;
 
               return (
                 <div
@@ -449,7 +367,7 @@ export default function ManagerQueuePage() {
                       paddingBottom: '10px',
                       borderBottom: '1px solid rgba(139,92,246,0.15)',
                     }}>
-                      <ShieldCheck size={13} /> Line manager approved — awaiting your confirmation
+                      <ShieldCheck size={13} /> Approved by {r.line_manager_name ?? 'line manager'} — awaiting your confirmation
                     </div>
                   )}
 
@@ -457,11 +375,11 @@ export default function ManagerQueuePage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
                         <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
-                          {r.requester.full_name.charAt(0)}
+                          {r.requester_name.charAt(0)}
                         </div>
                         <div>
-                          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.requester.full_name}</p>
-                          <p style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{r.requester.team} · {r.requester.role.replace(/_/g, ' ')}</p>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.requester_name}</p>
+                          <p style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{r.requester_team} · {r.requester_role.replace(/_/g, ' ')}</p>
                         </div>
                         <StatusBadge status={r.status} />
                         <span style={{
@@ -477,10 +395,10 @@ export default function ManagerQueuePage() {
                       </div>
                       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: r.reason ? '10px' : '0' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                          <CalendarDays size={13} style={{ color: 'var(--text-muted)' }} />{leaveTypeLabel[r.leave_type]}
+                          <CalendarDays size={13} style={{ color: 'var(--text-muted)' }} />{leaveTypeLabel(r.leave_type)}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                          <Clock size={13} style={{ color: 'var(--text-muted)' }} />{format(parseLocalDate(r.start_date), 'dd MMM')} – {format(parseLocalDate(r.end_date), 'dd MMM yyyy')} · {r.duration_days}d
+                          <Clock size={13} style={{ color: 'var(--text-muted)' }} />{formatDate(r.start_date, 'dd MMM')} – {formatDate(r.end_date)} · {r.duration_days}d
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--text-secondary)' }}>
                           <User size={13} style={{ color: 'var(--text-muted)' }} />Submitted {format(new Date(r.created_at), 'dd MMM yyyy')}
@@ -510,6 +428,7 @@ export default function ManagerQueuePage() {
                           </button>
                           <button
                             className="btn btn-info"
+                            disabled={busy}
                             onClick={() => handleApprove(r.id)}
                           >
                             <ShieldCheck size={14} /> Confirm
@@ -532,6 +451,7 @@ export default function ManagerQueuePage() {
                           </button>
                           <button
                             className="btn btn-success"
+                            disabled={busy}
                             onClick={() => handleApprove(r.id)}
                           >
                             <CheckCircle size={14} /> Approve

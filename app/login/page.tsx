@@ -1,7 +1,19 @@
 import LoginForm from '@/components/auth/LoginForm';
 import Link from 'next/link';
 
-export default function LoginPage() {
+const ERROR_MESSAGES: Record<string, string> = {
+  not_allowed: 'Only @spotflow.one Google accounts can use the Leave Portal.',
+  auth_failed: 'Sign-in didn’t complete. Please try again.',
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const { error } = await searchParams;
+  const initialError = typeof error === 'string' ? ERROR_MESSAGES[error] ?? ERROR_MESSAGES.auth_failed : '';
+
   return (
     <main
       style={{
@@ -37,7 +49,7 @@ export default function LoginPage() {
               Use your work Google account to continue
             </p>
           </div>
-          <LoginForm />
+          <LoginForm initialError={initialError} />
         </div>
       </div>
     </main>

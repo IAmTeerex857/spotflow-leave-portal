@@ -7,15 +7,15 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { getHolidayName, isPublicHoliday } from '@/lib/public-holidays';
+import { useHolidays } from '@/lib/public-holidays';
 
+/** Row shape from team_calendar(): who is away, without reasons or leave type. */
 interface LeaveEntry {
   id: string;
   requester_id: string;
+  full_name: string;
   start_date: string;
   end_date: string;
-  requester: { full_name: string; team: string };
-  leave_type: string;
   status: string;
 }
 
@@ -45,6 +45,8 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(new Date());
   const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const holidays = useHolidays();
+  const holidayNames = new Map(holidays.map(h => [h.date, h.name]));
 
   useEffect(() => {
     const fetchLeaves = async () => {
@@ -54,15 +56,8 @@ export default function CalendarPage() {
         const start = format(startOfMonth(month), 'yyyy-MM-dd');
         const end = format(endOfMonth(month), 'yyyy-MM-dd');
 
-        const { data } = await supabase
-          .from('leave_requests')
-          .select(`id, requester_id, start_date, end_date, leave_type, status,
-                   requester:profiles!leave_requests_requester_id_fkey(full_name, team)`)
-          .in('status', ['approved', 'pending'])
-          .or(`start_date.lte.${end},end_date.gte.${start}`)
-          .order('start_date', { ascending: true });
-
-        if (data) setLeaves(data as unknown as LeaveEntry[]);
+        const { data } = await supabase.rpc('team_calendar', { p_from: start, p_to: end });
+        if (data) setLeaves(data as LeaveEntry[]);
       } finally {
         setLoading(false);
       }
@@ -149,7 +144,7 @@ export default function CalendarPage() {
                 const dateStr = format(day, 'yyyy-MM-dd');
                 const inMonth = isSameMonth(day, month);
                 const today = isToday(day);
-                const holiday = isPublicHoliday(dateStr) ? getHolidayName(dateStr) : null;
+                const holiday = holidayNames.get(dateStr) ?? null;
                 const isWeekendDay = day.getDay() === 0 || day.getDay() === 6;
                 const dayLeaves = (!isWeekendDay && !holiday)
                   ? leaves.filter(l => isLeaveOnDay(l, dateStr))
@@ -198,13 +193,13 @@ export default function CalendarPage() {
                     {/* Leave pills */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                       {dayLeaves.slice(0, 3).map(l => {
-                        const colour = colourForName(l.requester.full_name);
-                        const firstName = l.requester.full_name.split(' ')[0];
-                        const isPending = l.status === 'pending';
+                        const colour = colourForName(l.full_name);
+                        const firstName = l.full_name.split(' ')[0];
+                        const isPending = l.status !== 'approved';
                         return (
                           <div
                             key={l.id}
-                            title={`${l.requester.full_name} — ${l.leave_type}${isPending ? ' (pending)' : ''}`}
+                            title={`${l.full_name}${isPending ? ' (pending)' : ''}`}
                             style={{
                               fontSize: '10px',
                               fontWeight: 600,
