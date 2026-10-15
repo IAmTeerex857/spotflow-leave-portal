@@ -47,7 +47,7 @@ export default function LoginForm({ initialError = '' }: { initialError?: string
         type="button"
         onClick={handleGoogleSignIn}
         disabled={loading}
-        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-violet-400/30 bg-[#09090b] text-[14px] font-medium text-white shadow-[0_0_0_1px_rgba(139,92,246,0.045),0_0_22px_-2px_rgba(139,92,246,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none transition-colors hover:border-violet-300/60 hover:bg-[#0e0e11] focus-visible:ring-2 focus-visible:ring-[#3ddc97]/60 disabled:cursor-wait"
+        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-white/[0.12] bg-[#09090b] text-[14px] font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] outline-none transition-colors hover:border-white/25 hover:bg-[#0e0e11] focus-visible:ring-2 focus-visible:ring-[#3ddc97]/60 disabled:cursor-wait"
       >
         {loading ? (
           <span className="inline-block">
