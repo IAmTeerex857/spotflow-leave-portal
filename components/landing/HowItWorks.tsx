@@ -146,7 +146,7 @@ function WatchingBlob({ expression }: { expression: Expression }) {
   }, [watching, lookAt, turnX, turnY]);
 
   return (
-    <div className="flex flex-col items-center gap-2" style={{ perspective: 600 }}>
+    <div style={{ perspective: 600 }}>
       <motion.button
         ref={head}
         type="button"
@@ -161,9 +161,6 @@ function WatchingBlob({ expression }: { expression: Expression }) {
         <span aria-hidden="true" className="absolute inset-0 -z-10 scale-125 rounded-full bg-[#3ddc97]/10 blur-2xl" />
         <Blobatar ref={eyes} name="Ada Okafor" size={116} background={false} animate="always" expression={expression} title="Ada, the requester" />
       </motion.button>
-      <span className="text-[11px] text-zinc-600" aria-live="polite">
-        {watching ? 'Ada’s watching you · click to stop' : 'Click Ada'}
-      </span>
     </div>
   );
 }
