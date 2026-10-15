@@ -28,7 +28,7 @@ export default async function LoginPage({
       }}
     >
       {/* Glow */}
-      <div style={{ position: 'absolute', top: '20%', left: '50%', transform: 'translateX(-50%)', width: '500px', height: '400px', background: 'radial-gradient(ellipse, rgba(108,99,255,0.1) 0%, transparent 65%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: '20%', left: '50%', transform: 'translateX(-50%)', width: '500px', height: '400px', background: 'radial-gradient(ellipse, rgba(108,99,255,0.05) 0%, transparent 65%)', pointerEvents: 'none' }} />
 
       <div className="fade-in" style={{ width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
         {/* Logo */}

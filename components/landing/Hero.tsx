@@ -1,146 +1,36 @@
-'use client';
-import Link from 'next/link';
-import { ArrowRight, CalendarCheck, ShieldCheck, Clock } from 'lucide-react';
+import FlowEngine from '@/components/landing/flow/FlowEngine';
+import GoogleIcon from '@/components/ui/GoogleIcon';
+import { SlideButton } from '@/components/ui/MotionButtons';
+
+// Fade the scene into the page on every side.
+const SCENE_MASK =
+  'linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 14%, #000 80%, transparent)';
 
 export default function Hero() {
   return (
-    <section
-      style={{
-        position: 'relative',
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-        padding: '0 24px',
-      }}
-    >
-      {/* Background glow blobs */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '15%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '700px',
-          height: '500px',
-          background: 'radial-gradient(ellipse, rgba(255,255,255,0.03) 0%, transparent 65%)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      {/* Subtle grid overlay */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)`,
-          backgroundSize: '64px 64px',
-          maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, black 0%, transparent 100%)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      {/* Content */}
-      <div
-        className="fade-in"
-        style={{
-          position: 'relative',
-          zIndex: 10,
-          textAlign: 'center',
-          maxWidth: '680px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '28px',
-        }}
-      >
-        {/* Headline */}
-        <h1
-          style={{
-            fontSize: 'clamp(40px, 6vw, 72px)',
-            fontWeight: 800,
-            lineHeight: 1.08,
-            letterSpacing: '-0.03em',
-            color: 'var(--text-primary)',
-          }}
-        >
-          Leave,{' '}
-          <span style={{ color: 'var(--text-primary)' }}>managed</span>
+    <section className="relative overflow-hidden pt-36 sm:pt-44">
+      <div className="relative z-10 mx-auto flex max-w-4xl flex-col items-center px-4 text-center">
+        <h1 className="text-balance text-[clamp(40px,6.4vw,72px)] font-bold leading-[1.05] tracking-[-0.035em] text-zinc-100">
+          Request leave in seconds.
           <br />
-          simply.
+          <span className="text-zinc-500">We&rsquo;ll handle the flow.</span>
         </h1>
-
-        {/* Subtext */}
-        <p
-          style={{
-            fontSize: '17px',
-            lineHeight: 1.65,
-            color: 'var(--text-muted)',
-            maxWidth: '480px',
-          }}
-        >
-          A structured, auditable workflow for requesting, reviewing, and approving
-          leave across Spotflow.
+        <p className="mt-6 max-w-[34rem] text-[17px] leading-relaxed text-zinc-400">
+          Send your request, it reaches the right approver, and approved time off lands on your calendar.
+          One place for leave across Spotflow.
         </p>
-
-        {/* CTAs */}
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Link href="/login" className="btn btn-primary btn-lg">
-            Sign in with Google
-            <ArrowRight size={16} />
-          </Link>
-        </div>
-
-        {/* Feature pills */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '10px',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            marginTop: '8px',
-          }}
-        >
-          {[
-            { icon: <CalendarCheck size={13} />, label: 'Leave tracking' },
-            { icon: <ShieldCheck size={13} />, label: 'Role-based access' },
-            { icon: <Clock size={13} />, label: 'Email notifications' },
-          ].map((item) => (
-            <span
-              key={item.label}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '999px',
-                padding: '5px 12px',
-              }}
-            >
-              <span style={{ color: 'var(--text-muted)' }}>{item.icon}</span>
-              {item.label}
-            </span>
-          ))}
+        <div className="mt-9 flex flex-col items-center gap-3">
+          <SlideButton href="/login" variant="primary" label="Sign in with Google" icon={<GoogleIcon size={16} />} />
+          <p className="text-xs text-zinc-500">Use your @spotflow.one work account</p>
         </div>
       </div>
 
-      {/* Bottom fade */}
       <div
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '120px',
-          background: 'linear-gradient(to top, var(--bg-base), transparent)',
-          pointerEvents: 'none',
-        }}
-      />
+        className="relative mx-auto -mt-4 h-[340px] max-w-[1400px] sm:-mt-8 sm:h-[500px] lg:h-[540px]"
+        style={{ maskImage: SCENE_MASK, WebkitMaskImage: SCENE_MASK, maskComposite: 'intersect', WebkitMaskComposite: 'source-in' }}
+      >
+        <FlowEngine className="h-full w-full" />
+      </div>
     </section>
   );
 }

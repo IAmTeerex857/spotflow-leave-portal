@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Accents: green for flow / approved, violet→blue for the engine and primary actions */
+  --color-flow: #3ddc97;
+  --color-flow-dim: #1f7a55;
+  --color-engine: #8b5cf6;
+  --color-engine-blue: #6366f1;
+  --color-ink: #0c0c0e;
+  --color-surface: #131316;
+  --color-elevated: #1a1a1f;
+}
+
 :root {
   --bg-base: #0C0C0E;
   --bg-surface: #131316;
@@ -20,14 +32,8 @@
   --rejected: #EF4444;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 html {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-sans);
   background-color: var(--bg-base);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -66,7 +72,7 @@ body {
 }
 
 .glow-blob-accent {
-  background: radial-gradient(circle, rgba(108,99,255,0.18) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(108,99,255,0.09) 0%, transparent 70%);
 }
 
 /* Button base */
@@ -75,7 +81,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   font-weight: 500;
   font-size: 14px;
   border-radius: 10px;
@@ -176,7 +182,7 @@ body {
   border-radius: 10px;
   padding: 11px 14px;
   font-size: 14px;
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -715,3 +721,13 @@ textarea.form-input {
   }
 }
 
+
+/* Landing: dotted flow lines drift toward the engine */
+@keyframes flow-dash {
+  to { stroke-dashoffset: -28; }
+}
+.flow-dash { animation: flow-dash 1.6s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-dash { animation: none; }
+}
