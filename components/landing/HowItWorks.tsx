@@ -6,11 +6,13 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useInView, useReducedMotion, useSpring, useTransform } from 'framer-motion';
 import { Liquid } from 'liquid-gooey';
 import { Blobatar } from '@blobatar/react';
-import { happy, idle, surprised } from 'blobatar/expression';
+import { useGaze } from '@blobatar/react/gaze';
+import { happy, idle, surprised, type Expression } from 'blobatar/expression';
 import 'blobatar/motion.css';
+import 'blobatar/gaze.css';
 import { CalendarCheck, CheckCircle2, FilePlus2, UserRoundCheck } from 'lucide-react';
 
 const STEP = 104;   // approximate row pitch until the real rows are measured
@@ -94,6 +96,74 @@ function RequestCard({ step }: { step: number }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Ada, the requester. Click her and she wakes up: her eyes lock on to the
+ * cursor and her head turns to follow it. Click again (or press Esc) and she
+ * goes back to glancing around on her own.
+ */
+function WatchingBlob({ expression }: { expression: Expression }) {
+  const head = useRef<HTMLButtonElement>(null);
+  const [watching, setWatching] = useState(false);
+  const { ref: eyes, lookAt } = useGaze({ travel: 4 });
+  const spring = { stiffness: 140, damping: 16, mass: 0.6 };
+  const turnX = useSpring(0, spring);
+  const turnY = useSpring(0, spring);
+  const rotateY = useTransform(turnX, (v) => v * 22);
+  const rotateX = useTransform(turnY, (v) => v * -16);
+  const x = useTransform(turnX, (v) => v * 7);
+  const y = useTransform(turnY, (v) => v * 5);
+
+  useEffect(() => {
+    lookAt(watching ? 'pointer' : null);
+    if (!watching) {
+      turnX.set(0);
+      turnY.set(0);
+      return;
+    }
+    // Turn towards the cursor: the direction sets which way she faces, and
+    // the distance how far (all the way once it's ~400px off).
+    const onMove = (e: PointerEvent) => {
+      const r = head.current?.getBoundingClientRect();
+      if (!r) return;
+      const dx = e.clientX - (r.left + r.width / 2);
+      const dy = e.clientY - (r.top + r.height / 2);
+      const dist = Math.hypot(dx, dy) || 1;
+      const reach = Math.min(1, dist / 400);
+      turnX.set((dx / dist) * reach);
+      turnY.set((dy / dist) * reach);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setWatching(false);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [watching, lookAt, turnX, turnY]);
+
+  return (
+    <div className="flex flex-col items-center gap-2" style={{ perspective: 600 }}>
+      <motion.button
+        ref={head}
+        type="button"
+        onClick={() => setWatching((w) => !w)}
+        aria-pressed={watching}
+        aria-label={watching ? 'Stop Ada watching the cursor' : 'Wake Ada up'}
+        style={{ x, y, rotateX, rotateY }}
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.94 }}
+        className="relative cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#3ddc97]/60"
+      >
+        <span aria-hidden="true" className="absolute inset-0 -z-10 scale-125 rounded-full bg-[#3ddc97]/10 blur-2xl" />
+        <Blobatar ref={eyes} name="Ada Okafor" size={116} background={false} animate="always" expression={expression} title="Ada, the requester" />
+      </motion.button>
+      <span className="text-[11px] text-zinc-600" aria-live="polite">
+        {watching ? 'Ada’s watching you · click to stop' : 'Click Ada'}
+      </span>
     </div>
   );
 }
@@ -201,10 +271,7 @@ export default function HowItWorks() {
           {/* The requester and their request */}
           <div className="relative flex flex-col items-center gap-6 rounded-3xl border border-white/[0.06] bg-[#101013] p-8">
             <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-40 rounded-t-3xl bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.04),transparent_70%)]" />
-            <div className="relative">
-              <div aria-hidden="true" className="absolute inset-0 -z-10 scale-125 rounded-full bg-[#3ddc97]/10 blur-2xl" />
-              <Blobatar name="Ada Okafor" size={116} background={false} animate="always" expression={STEPS[active].expression} title="Ada, the requester" />
-            </div>
+            <WatchingBlob expression={STEPS[active].expression} />
             <RequestCard step={active} />
           </div>
         </div>
