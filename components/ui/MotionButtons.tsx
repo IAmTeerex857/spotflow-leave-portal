@@ -19,7 +19,7 @@ const VARIANTS = {
     'h-9 px-5 text-[13px] text-white bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.06]',
   // Black, with the engine's violet glowing rim.
   primary:
-    'h-11 px-6 text-[14px] text-white bg-[#09090b] border border-violet-400/40 shadow-[0_0_0_1px_rgba(139,92,246,0.09),0_0_22px_-2px_rgba(139,92,246,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-violet-300/80 hover:bg-[#0e0e11]',
+    'h-11 px-6 text-[14px] text-white bg-[#09090b] border border-violet-400/30 shadow-[0_0_0_1px_rgba(139,92,246,0.045),0_0_22px_-2px_rgba(139,92,246,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-violet-300/80 hover:bg-[#0e0e11]',
 };
 
 const BASE =

@@ -200,7 +200,7 @@ export default function HowItWorks() {
 
           {/* The requester and their request */}
           <div className="relative flex flex-col items-center gap-6 rounded-3xl border border-white/[0.06] bg-[#101013] p-8">
-            <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-40 rounded-t-3xl bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.08),transparent_70%)]" />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-40 rounded-t-3xl bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.04),transparent_70%)]" />
             <div className="relative">
               <div aria-hidden="true" className="absolute inset-0 -z-10 scale-125 rounded-full bg-[#3ddc97]/10 blur-2xl" />
               <Blobatar name="Ada Okafor" size={116} background={false} animate="always" expression={STEPS[active].expression} title="Ada, the requester" />

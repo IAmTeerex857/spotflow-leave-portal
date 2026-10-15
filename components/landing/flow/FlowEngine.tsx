@@ -159,12 +159,12 @@ const Scenery = memo(function Scenery({ layer }: { layer: 'ground' | 'structures
     <>
 
       {/* Engine */}
-      <polygon points={engine.top} fill="none" stroke="#8b5cf6" strokeWidth={6} strokeOpacity={0.18} filter="url(#flow-glow)" />
-      <Solid shape={engine} shades={ENGINE_SHADES} topStroke="rgba(167,139,250,0.4)" />
+      <polygon points={engine.top} fill="none" stroke="#8b5cf6" strokeWidth={6} strokeOpacity={0.09} filter="url(#flow-glow)" />
+      <Solid shape={engine} shades={ENGINE_SHADES} topStroke="rgba(167,139,250,0.3)" />
       <g transform={onTop(0, 0, ENGINE.height)}>
         <rect x={-240} y={-240} width={480} height={480} rx={56} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
       </g>
-      <polygon points={disc.top} fill="none" stroke="#8b5cf6" strokeWidth={8} strokeOpacity={0.3} filter="url(#flow-glow)" />
+      <polygon points={disc.top} fill="none" stroke="#8b5cf6" strokeWidth={8} strokeOpacity={0.15} filter="url(#flow-glow)" />
       <Solid shape={disc} shades={ENGINE_SHADES} topFill="#0b0b0d" topStroke="#a78bfa" />
       <g transform={onTop(0, 0, ENGINE.height + 0.14)}>
         <g transform="translate(-82 -76) scale(6.3)">
@@ -301,8 +301,8 @@ function Frame({ t, avatars, layer }: { t: number; avatars: string[]; layer: 'wa
     <>
       {/* Engine pulse */}
       <g transform={onTop(0, 0, ENGINE.height + 0.14)} pointerEvents="none">
-        <circle r={160} fill="#8b5cf6" opacity={0.1 * pulse} />
-        <circle r={160 + sinceArrival * 170} fill="none" stroke="#c4b5fd" strokeWidth={1.5} vectorEffect="non-scaling-stroke" opacity={0.3 * clamp01(1 - sinceArrival / 0.9)} />
+        <circle r={160} fill="#8b5cf6" opacity={0.05 * pulse} />
+        <circle r={160 + sinceArrival * 170} fill="none" stroke="#c4b5fd" strokeWidth={1.5} vectorEffect="non-scaling-stroke" opacity={0.15 * clamp01(1 - sinceArrival / 0.9)} />
       </g>
       <g transform={onFrontRight(ENGINE.half, 0, ENGINE.height)}>
         <rect x={-150} y={22} width={300} height={68} rx={16} fill={GREEN} opacity={0.45 * emitGlow} />
@@ -367,7 +367,7 @@ export default function FlowEngine({ className }: { className?: string }) {
     >
       <defs>
         <radialGradient id="flow-engine-glow">
-          <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.16} />
+          <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.08} />
           <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
         </radialGradient>
         <radialGradient id="flow-grid-fade-g" cx="0.5" cy="0.45" r="0.6">

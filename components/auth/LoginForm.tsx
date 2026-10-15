@@ -6,7 +6,6 @@ import GoogleIcon from '@/components/ui/GoogleIcon';
 import { TextLoader } from 'generative-loaders';
 import 'generative-loaders/styles.css';
 
-
 export default function LoginForm({ initialError = '' }: { initialError?: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError);
@@ -39,42 +38,30 @@ export default function LoginForm({ initialError = '' }: { initialError?: string
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="flex flex-col gap-4">
       {error && (
-        <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '9px', padding: '10px 13px' }}>
-          <p style={{ fontSize: '13px', color: '#EF4444' }}>{error}</p>
-        </div>
+        <p role="alert" className="rounded-lg border border-red-400/20 bg-red-500/[0.08] px-3 py-2.5 text-[13px] text-red-300">{error}</p>
       )}
-
       <button
         id="google-signin"
+        type="button"
         onClick={handleGoogleSignIn}
         disabled={loading}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-          width: '100%', padding: '12px 20px',
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border-strong)',
-          borderRadius: '10px', cursor: loading ? 'not-allowed' : 'pointer',
-          fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)',
-          transition: 'all 0.15s ease',
-          opacity: loading ? 0.7 : 1,
-        }}
-        onMouseEnter={e => {
-          if (!loading) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)';
-        }}
-        onMouseLeave={e => {
-          (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-strong)';
-        }}
+        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-violet-400/30 bg-[#09090b] text-[14px] font-medium text-white shadow-[0_0_0_1px_rgba(139,92,246,0.045),0_0_22px_-2px_rgba(139,92,246,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none transition-colors hover:border-violet-300/60 hover:bg-[#0e0e11] focus-visible:ring-2 focus-visible:ring-[#3ddc97]/60 disabled:cursor-wait"
       >
-        <GoogleIcon />
-        {loading
-          ? <span style={{ display: 'inline-block' }}><TextLoader text="Redirecting to Google" variant="wave" color="currentColor" aria-label="Redirecting to Google" /></span>
-          : 'Continue with Google'}
+        {loading ? (
+          <span className="inline-block">
+            <TextLoader text="Redirecting to Google" variant="wave" color="currentColor" aria-label="Redirecting to Google" />
+          </span>
+        ) : (
+          <>
+            <GoogleIcon size={16} />
+            Continue with Google
+          </>
+        )}
       </button>
-
-      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-        Use your <strong style={{ color: 'var(--text-secondary)' }}>@spotflow.one</strong> work account to sign in.
+      <p className="text-center text-[12px] text-zinc-500">
+        Use your <span className="font-medium text-zinc-300">@spotflow.one</span> work account.
       </p>
     </div>
   );

@@ -2,14 +2,14 @@ import Link from 'next/link';
 
 export default function NotFound() {
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-        <p style={{ fontSize: '100px', fontWeight: 800, color: 'var(--bg-elevated)', lineHeight: 1, letterSpacing: '-0.05em' }}>404</p>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>Page not found</h1>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>The page you&apos;re looking for doesn&apos;t exist or has been moved.</p>
-        </div>
-        <Link href="/dashboard" className="btn btn-primary">Back to dashboard</Link>
+    <main className="flex min-h-screen items-center justify-center bg-[#0c0c0e] px-4">
+      <div className="flex max-w-sm flex-col items-center text-center">
+        <p className="text-[88px] font-bold leading-none tracking-[-0.05em] text-white/[0.06]">404</p>
+        <h1 className="mt-4 text-[20px] font-semibold tracking-tight text-zinc-100">Page not found</h1>
+        <p className="mt-2 text-[14px] text-zinc-500">It doesn’t exist, or it has moved.</p>
+        <Link href="/dashboard" className="mt-7 inline-flex h-9 items-center rounded-full bg-zinc-100 px-4 text-[13px] font-medium text-zinc-900 hover:bg-white">
+          Back to dashboard
+        </Link>
       </div>
     </main>
   );
